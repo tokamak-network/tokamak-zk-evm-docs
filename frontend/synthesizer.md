@@ -22,13 +22,13 @@ However, we have chosen not to implement a Keccak circuit due to efficiency conc
 
 ### Where can I get the input?
 
-* Ethereum transactions
+- Ethereum transactions
 
 You can retrieve Ethereum transactions from [Etherscan.io](http://etherscan.io). Simply copy a transaction’s bytecode and provide it to Synthesizer.
 
 In the future, we plan to enhance the user experience by allowing users to fetch bytecodes directly from Etherscan’s API using only the transaction ID.
 
-* Subcircuit library
+- Subcircuit library
 
 We provide the [`qap-compiler`](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler) that manages a library of fundamental subcircuits. These subcircuits support EVM arithmetic and logical operations for 256-bit words. The subcircuits can be compiled into the R1CS format using [Circom](https://docs.circom.io/), making them compatible with Synthesizer. You don’t need to be familiar with Circom. Simply ensure that Circom is installed on your system and run the following shell script (be sure that you are in the folder "Tokamak-zk-EVM/packages/frontend/qap-compiler"):
 
@@ -164,29 +164,33 @@ For example, suppose that there was data $$x$$ of length 0x20 at memory offset 0
 
 #### Key instructions
 
-*   PUSHs: In the EVM, the PUSH instructions add hardcoded values from a bytecode to the stack. In Synthesizer, these value are symbolized (e.g., as $$x$$ through the `LOAD` buffer interface. The symbol is then added to the top of `StackPt`. The wires of `LOAD` used for the symbolization are recorded in `Placements`. \
+- PUSHs: In the EVM, the PUSH instructions add hardcoded values from a bytecode to the stack. In Synthesizer, these value are symbolized (e.g., as $$x$$ through the `LOAD` buffer interface. The symbol is then added to the top of `StackPt`. The wires of `LOAD` used for the symbolization are recorded in `Placements`. \
 
+  <figure><img src="../.gitbook/assets/Frame 33131 (1).png" alt=""><figcaption></figcaption></figure>
 
-    <figure><img src="../.gitbook/assets/Frame 33131 (1).png" alt=""><figcaption></figcaption></figure>
-* MSTORE8: In the EVM, the MSTORE8 instruction writes only the last 8 bits of a stack item to the memory. In Synthesizer, this process is emulated by masking the symbol with a library subcircuit for the AND operation. The resulting symbol is added to `MemoryPt`. The `LOAD` wires for symbolizing a masker value and the new `AND` placement are recorded in `Placements`.
-* MSTORE: In the EVM, the MSTORE instruction writes a stack item to memory. In Synthesizer, the MSTORE instruction adds a `StackPt` symbol to `MemoryPt`. No additional subcircuit placement is required.
-*   MSTORE8: In the EVM, the MSTORE8 instruction writes only the last 8 bits of a stack item to the memory. In Synthesizer, this process is emulated by masking the symbol with a library subcircuit for the AND operation. The resulting symbol is added to `MemoryPt`. The `LOAD` wires for symbolizing a masker value and the new `AND` placement are recorded in `Placements`.
+- MSTORE8: In the EVM, the MSTORE8 instruction writes only the last 8 bits of a stack item to the memory. In Synthesizer, this process is emulated by masking the symbol with a library subcircuit for the AND operation. The resulting symbol is added to `MemoryPt`. The `LOAD` wires for symbolizing a masker value and the new `AND` placement are recorded in `Placements`.
+- MSTORE: In the EVM, the MSTORE instruction writes a stack item to memory. In Synthesizer, the MSTORE instruction adds a `StackPt` symbol to `MemoryPt`. No additional subcircuit placement is required.
+- MSTORE8: In the EVM, the MSTORE8 instruction writes only the last 8 bits of a stack item to the memory. In Synthesizer, this process is emulated by masking the symbol with a library subcircuit for the AND operation. The resulting symbol is added to `MemoryPt`. The `LOAD` wires for symbolizing a masker value and the new `AND` placement are recorded in `Placements`.
 
-    <figure><img src="../.gitbook/assets/Frame 32989.png" alt=""><figcaption></figcaption></figure>
-*   MLOAD: In the EVM, the MLOAD instruction reads a specific memory region and adds the result to the stack. In Synthesizer, any possible aliasing of overwritten symbols in the memory region is reproduced using subcircuits (e.g., the library’s subcircuits for ADD, SHL, SHR, AND operations). The reproduced symbol is finally added to `StackPt`. All involved `LOAD` wires and new placements are recorded in `Placements`.
+  <figure><img src="../.gitbook/assets/Frame 32989.png" alt=""><figcaption></figcaption></figure>
 
-    <figure><img src="../.gitbook/assets/Frame 10206 (2).png" alt=""><figcaption></figcaption></figure>
-*   SSTORE: In the EVM, the SSTORE instruction moves a stack item to storage. We can regard this item as one of the actual EVM outputs. In Synthesizer, a `StackPt` symbol is fed to the interface buffer, `RETURN`, so that we can desymbolize or evaluate it. The wires of RETURN involved in the evaluation are recorded in `Placements`.\
+- MLOAD: In the EVM, the MLOAD instruction reads a specific memory region and adds the result to the stack. In Synthesizer, any possible aliasing of overwritten symbols in the memory region is reproduced using subcircuits (e.g., the library’s subcircuits for ADD, SHL, SHR, AND operations). The reproduced symbol is finally added to `StackPt`. All involved `LOAD` wires and new placements are recorded in `Placements`.
 
+  <figure><img src="../.gitbook/assets/Frame 10206 (2).png" alt=""><figcaption></figcaption></figure>
 
-    <figure><img src="../.gitbook/assets/Frame 32990 (1).png" alt=""><figcaption></figcaption></figure>
-*   SLOAD: In the EVM, the SLOAD instruction retrieves a storage value and adds it to the stack. In Synthesizer, this value is symbolized through `LOAD` and added to `StackPt`. The `LOAD` for the symbolization are recorded in `Placements`.
+- SSTORE: In the EVM, the SSTORE instruction moves a stack item to storage. We can regard this item as one of the actual EVM outputs. In Synthesizer, a `StackPt` symbol is fed to the interface buffer, `RETURN`, so that we can desymbolize or evaluate it. The wires of RETURN involved in the evaluation are recorded in `Placements`.\
 
-    <figure><img src="../.gitbook/assets/Frame 32977 (2).png" alt=""><figcaption></figcaption></figure>
-*   MCOPY: In the EVM, the MCOPY instruction copies a memory region of flexible size to another offset. In Synthesizer, truncation and shifting of symbols are reproduced before adding them to `MemoryPt`. All involved `LOAD` wires and new placements are recorded in `Placements`.
+  <figure><img src="../.gitbook/assets/Frame 32990 (1).png" alt=""><figcaption></figcaption></figure>
 
-    <figure><img src="../.gitbook/assets/Frame 33122 (6).png" alt=""><figcaption><p>Reproduction of the newly added symbols</p></figcaption></figure>
-* JUMP/JUMPI: Synthesizer performs no additional work beyond managing `StackPt.`
+- SLOAD: In the EVM, the SLOAD instruction retrieves a storage value and adds it to the stack. In Synthesizer, this value is symbolized through `LOAD` and added to `StackPt`. The `LOAD` for the symbolization are recorded in `Placements`.
+
+  <figure><img src="../.gitbook/assets/Frame 32977 (2).png" alt=""><figcaption></figcaption></figure>
+
+- MCOPY: In the EVM, the MCOPY instruction copies a memory region of flexible size to another offset. In Synthesizer, truncation and shifting of symbols are reproduced before adding them to `MemoryPt`. All involved `LOAD` wires and new placements are recorded in `Placements`.
+
+  <figure><img src="../.gitbook/assets/Frame 33122 (6).png" alt=""><figcaption><p>Reproduction of the newly added symbols</p></figcaption></figure>
+
+- JUMP/JUMPI: Synthesizer performs no additional work beyond managing `StackPt.`
 
 ### Arithmetic, comparison, and bitwise logic operations
 
@@ -198,24 +202,25 @@ The placements that track symbol relationships resulting from these instructions
 
 #### Instructions that need indirect placements
 
-*   EXP: Since the number of multiplications for a single exponentiation can only be determined when the input value is given, it is challenging to implement it as an optimized circuit. The output symbol manipulated by the EXP instruction can be reproduced using the placements shown in the figure below. This process utilizes two library subcircuits, `Bitify` and `SubEXP`.
+- EXP: Since the number of multiplications for a single exponentiation can only be determined when the input value is given, it is challenging to implement it as an optimized circuit. The output symbol manipulated by the EXP instruction can be reproduced using the placements shown in the figure below. This process utilizes two library subcircuits, `Bitify` and `SubEXP`.
 
-    * `Bitify`: It has one input $$y$$, and $$k$$ outputs $$b_0,\cdots,b_{k-1}$$, such that $$y=\sum_{i=0}^{k-1}b_i2^i$$.
-    * `SubEXP`: It has three inputs $$z_i,x_i,b_i$$, and two outputs $$z_{i+1},x_{i+1}$$, such that $$z_{i+1}=z_ix_i^{b_i}$$, $$x_{i+1}=x_i^2$$, and $$b_i\in\{0,1\}$$.
+  - `Bitify`: It has one input $$y$$, and $$k$$ outputs $$b_0,\cdots,b_{k-1}$$, such that $$y=\sum_{i=0}^{k-1}b_i2^i$$.
+  - `SubEXP`: It has three inputs $$z_i,x_i,b_i$$, and two outputs $$z_{i+1},x_{i+1}$$, such that $$z_{i+1}=z_ix_i^{b_i}$$, $$x_{i+1}=x_i^2$$, and $$b_i\in\{0,1\}$$.
 
-    <figure><img src="../.gitbook/assets/Frame 32992 (2).png" alt=""><figcaption><p>Reproduction of the newly added symbols</p></figcaption></figure>
-*   KECCAK256: Implementing Keccak hashing directly in a circuit is computationally inefficient. Both direct subcircuit implementation, such as [Keccak256-circom](https://github.com/vocdoni/keccak256-circom), and indirect derivation of placements would result in complexities of approximately 151k constraints. This is significantly higher compared to the complexity of thousands for the library subcircuits. Therefore, adopting a KECCAK256 subcircuit would severely impact the performance of the subsequent proving algorithm of the Tokamak zk-SNARK.
+  <figure><img src="../.gitbook/assets/Frame 32992 (2).png" alt=""><figcaption><p>Reproduction of the newly added symbols</p></figcaption></figure>
 
-    As a result, Synthesizer does not reproduce the output symbols of KECCAK256. Instead, it uses buffer subcircuits to emit the KECCAK256 input values from the circuit and reintroduce the KECCAK256 output values back into the circuit. Outside the circuit, the Keccak hash computation can be run by the verifier of the Tokamak-zk SNARK.
+- KECCAK256: Implementing Keccak hashing directly in a circuit is computationally inefficient. Both direct subcircuit implementation, such as [Keccak256-circom](https://github.com/vocdoni/keccak256-circom), and indirect derivation of placements would result in complexities of approximately 151k constraints. This is significantly higher compared to the complexity of thousands for the library subcircuits. Therefore, adopting a KECCAK256 subcircuit would severely impact the performance of the subsequent proving algorithm of the Tokamak zk-SNARK.
 
-    <figure><img src="../.gitbook/assets/Frame 32997.png" alt=""><figcaption></figcaption></figure>
+  As a result, Synthesizer does not reproduce the output symbols of KECCAK256. Instead, it uses buffer subcircuits to emit the KECCAK256 input values from the circuit and reintroduce the KECCAK256 output values back into the circuit. Outside the circuit, the Keccak hash computation can be run by the verifier of the Tokamak-zk SNARK.
 
-    In the EVM, the KECCAK256 instruction first loads a value from a specific memory region of variable length. This length can exceed the EVM’s word size of 32 bytes, and the value is then passed to the Keccak hash function. In Synthesizer, reproducing aliasing of symbols that during memory loading is handled similarly to the MLOAD instruction, with adjustments to account for the dynamic length of the memory region:
+  <figure><img src="../.gitbook/assets/Frame 32997.png" alt=""><figcaption></figcaption></figure>
 
-    * If the length of the memory region does not exceed 32 bytes, aliasing is reproduced in the same manner as described for MLOAD.
-    * If the length of the memory region exceeds 32 bytes, Synthesizer divides the memory region into multiple 32-byte chunks and reproduces aliasing for each chunk individually.
+  In the EVM, the KECCAK256 instruction first loads a value from a specific memory region of variable length. This length can exceed the EVM’s word size of 32 bytes, and the value is then passed to the Keccak hash function. In Synthesizer, reproducing aliasing of symbols that during memory loading is handled similarly to the MLOAD instruction, with adjustments to account for the dynamic length of the memory region:
 
-    <figure><img src="../.gitbook/assets/Frame 32995.png" alt=""><figcaption></figcaption></figure>
+  - If the length of the memory region does not exceed 32 bytes, aliasing is reproduced in the same manner as described for MLOAD.
+  - If the length of the memory region exceeds 32 bytes, Synthesizer divides the memory region into multiple 32-byte chunks and reproduces aliasing for each chunk individually.
+
+  <figure><img src="../.gitbook/assets/Frame 32995.png" alt=""><figcaption></figcaption></figure>
 
 ### System operations
 
@@ -229,20 +234,22 @@ To track symbol manipulations across all contexts, `Placements` is shared and jo
 
 #### Key instructions
 
-*   CALL, CALLCODE, DELEGATECALL, STATICCALL (in a parent context): In the EVM, these instructions first copy a specific memory region from the parent context into a buffer. This buffer is then passed to the child context as environment information.
+- CALL, CALLCODE, DELEGATECALL, STATICCALL (in a parent context): In the EVM, these instructions first copy a specific memory region from the parent context into a buffer. This buffer is then passed to the child context as environment information.
 
-    In the Synthesizer, the data transfer from the memory to the buffer is handled in the same way as with the MCOPY instruction.
+  In the Synthesizer, the data transfer from the memory to the buffer is handled in the same way as with the MCOPY instruction.
 
-    <figure><img src="../.gitbook/assets/Frame 33118 (1).png" alt=""><figcaption></figcaption></figure>
-*   CALLDATALOAD, CALLDATACOPY (in a child context): In the child context, these instructions retrieve the buffer content. Any data aliasing during this process is reproduced in the same way as with the MLOAD or MCOPY instructions.
+  <figure><img src="../.gitbook/assets/Frame 33118 (1).png" alt=""><figcaption></figcaption></figure>
 
-    <figure><img src="../.gitbook/assets/Frame 33115 (2).png" alt=""><figcaption></figcaption></figure>
-* Any instruction execution (in a child context): All symbol manipulations are recorded in `Placements`, regardless of the context in which the EVM interpreter operators.
-*   RETURN (in a child context): In the EVM, this instruction transfers a specified memory region from the child context back to the parent context’s memory: The child context’s memory region of interest is first copied into a buffer, and when control returns to the parent context, the buffer content is written to a predefined memory region in the parent context.
+- CALLDATALOAD, CALLDATACOPY (in a child context): In the child context, these instructions retrieve the buffer content. Any data aliasing during this process is reproduced in the same way as with the MLOAD or MCOPY instructions.
 
-    In Synthesizer, data aliasing during this composite transfer (from memory to buffer and then back to memory) is reproduced in the same way as with the MCOPY instruction.
+  <figure><img src="../.gitbook/assets/Frame 33115 (2).png" alt=""><figcaption></figcaption></figure>
 
-    <figure><img src="../.gitbook/assets/Frame 33124 (3).png" alt=""><figcaption></figcaption></figure>
+- Any instruction execution (in a child context): All symbol manipulations are recorded in `Placements`, regardless of the context in which the EVM interpreter operators.
+- RETURN (in a child context): In the EVM, this instruction transfers a specified memory region from the child context back to the parent context’s memory: The child context’s memory region of interest is first copied into a buffer, and when control returns to the parent context, the buffer content is written to a predefined memory region in the parent context.
+
+  In Synthesizer, data aliasing during this composite transfer (from memory to buffer and then back to memory) is reproduced in the same way as with the MCOPY instruction.
+
+  <figure><img src="../.gitbook/assets/Frame 33124 (3).png" alt=""><figcaption></figcaption></figure>
 
 ### Environmental and block information
 
@@ -254,8 +261,8 @@ In Synthesizer, loading the external inputs to the EVM is handled in the same wa
 
 There are exceptions to this process, specifically for instructions like CALLDATALOAD, CALLDATACOPY, and RETURNCOPY when executed in child contexts:
 
-* Main context: When these instructions are executed in the main context, the data loaded is treated as external inputs to the EVM, following the standard process similar to the case of SLOAD as described above.
-* Child contexts: When executed in a child context, these instructions are processed as described in the section “System operations”, where they handle data transfer between contexts via buffers and produce aliasing if necessary.
+- Main context: When these instructions are executed in the main context, the data loaded is treated as external inputs to the EVM, following the standard process similar to the case of SLOAD as described above.
+- Child contexts: When executed in a child context, these instructions are processed as described in the section “System operations”, where they handle data transfer between contexts via buffers and produce aliasing if necessary.
 
 ### Log instructions
 
@@ -275,8 +282,8 @@ The following features or instructions are not currently supported in the existi
 
 Transactions involving precompiled operations are not yet supported. Implementing support for these operations will require:
 
-* Additional optimizations to the subcircuit library.
-* Specialized circuitry for each precompiled operation.
+- Additional optimizations to the subcircuit library.
+- Specialized circuitry for each precompiled operation.
 
 While this is not a technically challenging task, it is time-intensive and will be addressed in subsequent updates.
 
@@ -284,9 +291,9 @@ While this is not a technically challenging task, it is time-intensive and will 
 
 The following instructions in the system operations group are not yet supported:
 
-* CREATE
-* CREATE2
-* REVERT
-* SELFDESTRUCT
+- CREATE
+- CREATE2
+- REVERT
+- SELFDESTRUCT
 
 Support for these instructions will be introduced in upcoming updates.
