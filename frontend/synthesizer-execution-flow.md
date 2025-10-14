@@ -1,4 +1,4 @@
-# Synthesizer: Execution Flow & Examples
+# Synthesizer: Execution Flow
 
 This document walks through how Synthesizer processes Ethereum transactions, showing the complete execution flow from input to output with practical examples.
 
@@ -26,7 +26,7 @@ The following diagram shows the complete flow of a transaction through Synthesiz
 │   (0x...)   │            │                 │           │              │
 │             │            │                 │           │              │
 │─────────────│            │                 │           │              │
-│             │            │                 │           │      │
+│             │            │                 │           │              │
 │  Subcircuit │            │                 │           │              │
 │   Library   │──────────► └────────┬────────┘           │              │
 │             │                     │                    │  permutation │
@@ -35,9 +35,9 @@ The following diagram shows the complete flow of a transaction through Synthesiz
 │             │            │                 │           │   instance   │
 │   RPC Data  │            │  EVM + Symbol   │           │     .json    │
 │ (Block info)│            │   Execution     │           │              │
-│ (On-demand) │            │                 │           │ placementVar │
-│             │            │                 │           │     .json    │
-└─────────────┘            │                 │           │              │
+│ (On-demand) │            │                 │           │   placement  │
+│             │            │                 │           |   Variables  │
+└─────────────┘            │                 │           │      .json   │
                            │                 │           │              │
                            │                 │           │              │
                            │                 │           │              │
