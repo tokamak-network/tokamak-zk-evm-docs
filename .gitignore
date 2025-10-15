@@ -1,2 +1,8 @@
+node_modules/
+_book/
+.DS_Store
+*.log
+
+#Cursor
 .cursor
 .cursorrules

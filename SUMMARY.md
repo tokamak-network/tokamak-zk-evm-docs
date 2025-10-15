@@ -1,7 +1,7 @@
 # Table of contents
 
 - [Project Overview](README.md)
-- [frontend](frontend/README.md)
+- [Frontend](frontend/README.md)
   - [Synthesizer](frontend/synthesizer.md)
     - [Architecture](frontend/synthesizer-architecture.md)
     - [Execution Flow & Examples](frontend/synthesizer-execution-flow.md)

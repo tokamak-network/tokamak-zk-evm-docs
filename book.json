@@ -1,0 +1,11 @@
+{
+  "title": "Tokamak zk-EVM Documentation",
+  "description": "Technical documentation for Tokamak zk-EVM Synthesizer",
+  "author": "Tokamak Network",
+  "language": "en",
+  "styles": {
+    "website": "styles/website.css"
+  },
+  "plugins": ["-search", "fontsettings", "theme-default", "-highlight"],
+  "pluginsConfig": {}
+}

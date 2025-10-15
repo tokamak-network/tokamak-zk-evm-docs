@@ -1,7 +1,5 @@
 # Synthesizer Opcode Reference
 
-**Inspired by [evm.codes](https://www.evm.codes/)**
-
 This document describes how the Tokamak Synthesizer handles each EVM opcode, comparing standard EVM behavior with circuit generation.
 
 ---
@@ -84,23 +82,55 @@ The Synthesizer uses pre-compiled subcircuits from the [QAP Compiler](https://gi
 
 ---
 
+## All Opcodes
+
+| Opcode      | Name         | Stack In             | Stack Out               | Subcircuit    | Details                                   |
+| ----------- | ------------ | -------------------- | ----------------------- | ------------- | ----------------------------------------- |
+| `0x01`      | ADD          | a, b                 | a + b                   | ALU1          | [View Details →](#0x01-add)               |
+| `0x02`      | MUL          | a, b                 | a × b                   | ALU1          | [View Details →](#0x02-mul)               |
+| `0x03`      | SUB          | a, b                 | a - b                   | ALU1          | [View Details →](#0x03-sub)               |
+| `0x04`      | DIV          | a, b                 | a / b                   | ALU2          | [View Details →](#0x04-div)               |
+| `0x0a`      | EXP          | base, exp            | base ^ exp              | ALU1+DecToBit | [View Details →](#0x0a-exp)               |
+| `0x10`      | LT           | a, b                 | a < b                   | ALU4          | [View Details →](#0x10-lt)                |
+| `0x11`      | GT           | a, b                 | a > b                   | ALU4          | [View Details →](#0x11-gt)                |
+| `0x12`      | SLT          | a, b                 | a < b (signed)          | ALU4          | [View Details →](#0x12-slt)               |
+| `0x13`      | SGT          | a, b                 | a > b (signed)          | ALU4          | [View Details →](#0x13-sgt)               |
+| `0x14`      | EQ           | a, b                 | a == b                  | ALU1          | [View Details →](#0x14-eq)                |
+| `0x15`      | ISZERO       | a                    | a == 0                  | ALU1          | [View Details →](#0x15-iszero)            |
+| `0x16`      | AND          | a, b                 | a & b                   | AND           | [View Details →](#0x16-and)               |
+| `0x17`      | OR           | a, b                 | a &#124; b              | OR            | [View Details →](#0x17-or)                |
+| `0x18`      | XOR          | a, b                 | a ^ b                   | XOR           | [View Details →](#0x18-xor)               |
+| `0x19`      | NOT          | a                    | ~a                      | ALU1          | [View Details →](#0x19-not)               |
+| `0x1a`      | BYTE         | i, x                 | x[i]                    | ALU5          | [View Details →](#0x1a-byte)              |
+| `0x1b`      | SHL          | shift, value         | value << shift          | ALU3          | [View Details →](#0x1b-shl)               |
+| `0x1c`      | SHR          | shift, value         | value >> shift          | ALU3          | [View Details →](#0x1c-shr)               |
+| `0x1d`      | SAR          | shift, value         | value >> shift (signed) | ALU3          | [View Details →](#0x1d-sar)               |
+| `0x20`      | KECCAK256    | offset, size         | hash                    | External      | [View Details →](#0x20-keccak256)         |
+| `0x30`      | ADDRESS      | -                    | address(this)           | PUB_IN        | [View Details →](#0x30-address)           |
+| `0x35`      | CALLDATALOAD | i                    | calldata[i]             | PUB_IN        | [View Details →](#0x35-calldataload)      |
+| `0x37`      | CALLDATACOPY | memOff, dataOff, len | -                       | PUB_IN        | [View Details →](#0x37-calldatacopy)      |
+| `0x50`      | POP          | value                | -                       | Stack         | [View Details →](#0x50-pop)               |
+| `0x51`      | MLOAD        | offset               | memory[offset]          | Memory        | [View Details →](#0x51-mload)             |
+| `0x52`      | MSTORE       | offset, value        | -                       | Memory        | [View Details →](#0x52-mstore)            |
+| `0x54`      | SLOAD        | key                  | storage[key]            | PRV_IN        | [View Details →](#0x54-sload)             |
+| `0x55`      | SSTORE       | key, value           | -                       | PRV_OUT       | [View Details →](#0x55-sstore)            |
+| `0x60-0x7f` | PUSH1-32     | -                    | value                   | Constant      | [View Details →](#0x60-0x7f-push1-push32) |
+| `0x80-0x8f` | DUP1-16      | ...                  | value, ...              | Stack         | [View Details →](#0x80-0x8f-dup1-dup16)   |
+| `0x90-0x9f` | SWAP1-16     | a, ..., b            | b, ..., a               | Stack         | [View Details →](#0x90-0x9f-swap1-swap16) |
+
+---
+
 ## Arithmetic Operations
+
+<a id="0x01-add"></a>
+
+<a id="0x01-add"></a>
 
 ### 0x01: ADD
 
-**Opcode**: `0x01`  
-**Mnemonic**: `ADD`  
-**Gas**: 3  
-**Stack Input**: `a`, `b`  
-**Stack Output**: `a + b mod 2^256`
+**Constraints**: 803 | **Status**: ✅ Implemented
 
-#### Standard EVM Behavior
-
-```typescript
-const [a, b] = stack.popN(2);
-const result = (a + b) % TWO_POW256;
-stack.push(result);
-```
+**Stack**: `a, b` → `a + b mod 2^256`
 
 #### Synthesizer Behavior
 
@@ -112,39 +142,22 @@ synthesizerArith('ADD', [a.value, b.value], result, runState);
 
 #### Circuit Generation
 
-- **Subcircuit**: `ALU1`
-- **Selector**: `1n << 1n` (binary: `0b10`)
-- **Inputs**: `[selector, a, b]`
-- **Outputs**: `[result]`
-- **Constraints**: 803 constraints (630 non-linear + 173 linear)
+- **Subcircuit**: `ALU1` | **Selector**: `1n << 1n`
+- **Constraints**: 803 (630 non-linear + 173 linear)
 
-#### Source Code
-
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:97-103`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L97-L103)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:18-26`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L18-L26)
-- Subcircuit Mapping: [`packages/frontend/synthesizer/src/tokamak/constant/constants.ts:53`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/constant/constants.ts#L53)
-
-#### Status
-
-✅ **Implemented** (Alpha)
+**Source**: [`functions.ts:97-103`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L97-L103) | [`handlers.ts:18-26`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L18-L26)
 
 ---
 
+<a id="0x02-mul"></a>
+
+<a id="0x02-mul"></a>
+
 ### 0x02: MUL
 
-**Opcode**: `0x02`  
-**Mnemonic**: `MUL`  
-**Gas**: 5  
-**Stack Input**: `a`, `b`  
-**Stack Output**: `a * b mod 2^256`
+**Constraints**: 803 | **Status**: ✅ Implemented
 
-#### Standard EVM Behavior
-
-```typescript
-const [a, b] = stack.popN(2);
-const result = (a * b) % TWO_POW256;
-stack.push(result);
-```
+**Stack**: `a, b` → `a * b mod 2^256`
 
 #### Synthesizer Behavior
 
@@ -156,39 +169,22 @@ synthesizerArith('MUL', [a.value, b.value], result, runState);
 
 #### Circuit Generation
 
-- **Subcircuit**: `ALU1`
-- **Selector**: `1n << 2n` (binary: `0b100`)
-- **Inputs**: `[selector, a, b]`
-- **Outputs**: `[result]`
-- **Constraints**: 803 constraints (same ALU1 subcircuit, different selector)
+- **Subcircuit**: `ALU1` | **Selector**: `1n << 2n`
+- **Constraints**: 803 (same ALU1 subcircuit, different selector)
 
-#### Source Code
-
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:105-111`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L105-L111)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:28-36`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L28-L36)
-- Subcircuit Mapping: [`packages/frontend/synthesizer/src/tokamak/constant/constants.ts:54`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/constant/constants.ts#L54)
-
-#### Status
-
-✅ **Implemented** (Alpha)
+**Source**: [`functions.ts:105-111`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L105-L111) | [`handlers.ts:28-36`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L28-L36)
 
 ---
 
+<a id="0x03-sub"></a>
+
+<a id="0x03-sub"></a>
+
 ### 0x03: SUB
 
-**Opcode**: `0x03`  
-**Mnemonic**: `SUB`  
-**Gas**: 3  
-**Stack Input**: `a`, `b`  
-**Stack Output**: `a - b mod 2^256`
+**Constraints**: 803 | **Status**: ✅ Implemented
 
-#### Standard EVM Behavior
-
-```typescript
-const [a, b] = stack.popN(2);
-const result = (a - b) % TWO_POW256;
-stack.push(result);
-```
+**Stack**: `a, b` → `a - b mod 2^256`
 
 #### Synthesizer Behavior
 
@@ -200,88 +196,49 @@ synthesizerArith('SUB', [a.value, b.value], result, runState);
 
 #### Circuit Generation
 
-- **Subcircuit**: `ALU1`
-- **Selector**: `1n << 3n` (binary: `0b1000`)
-- **Inputs**: `[selector, a, b]`
-- **Outputs**: `[result]`
-- **Constraints**: 803 constraints (same ALU1 subcircuit)
+- **Subcircuit**: `ALU1` | **Selector**: `1n << 3n`
+- **Constraints**: 803
 
-#### Source Code
-
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:113-119`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L113-L119)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:38-46`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L38-L46)
-- Subcircuit Mapping: [`packages/frontend/synthesizer/src/tokamak/constant/constants.ts:55`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/constant/constants.ts#L55)
-
-#### Status
-
-✅ **Implemented** (Alpha)
+**Source**: [`functions.ts:113-119`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L113-L119) | [`handlers.ts:38-46`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L38-L46)
 
 ---
 
+<a id="0x04-div"></a>
+
+<a id="0x04-div"></a>
+
 ### 0x04: DIV
 
-**Opcode**: `0x04`  
-**Mnemonic**: `DIV`  
-**Gas**: 5  
-**Stack Input**: `a`, `b`  
-**Stack Output**: `a / b` (integer division, 0 if b == 0)
+**Constraints**: 993 | **Status**: ✅ Implemented
 
-#### Standard EVM Behavior
-
-```typescript
-const [a, b] = stack.popN(2);
-let result;
-if (b === BIGINT_0) {
-  result = BIGINT_0;
-} else {
-  result = a / b;
-}
-stack.push(result);
-```
+**Stack**: `a, b` → `a / b` (integer division, 0 if b == 0)
 
 #### Synthesizer Behavior
 
 ```typescript
 const [a, b] = stackPt.popN(2);
-let result;
-if (b.value === BIGINT_0) {
-  result = BIGINT_0;
-} else {
-  result = mod(a.value / b.value, TWO_POW256);
-}
+let result = b.value === BIGINT_0 ? BIGINT_0 : mod(a.value / b.value, TWO_POW256);
 synthesizerArith('DIV', [a.value, b.value], result, runState);
 ```
 
 #### Circuit Generation
 
-- **Subcircuit**: `ALU2` (handles division/modulo operations)
-- **Selector**: `1n << 4n` (binary: `0b10000`)
-- **Inputs**: `[selector, a, b]`
-- **Outputs**: `[result]`
-- **Constraints**: 993 constraints (566 non-linear + 427 linear)
+- **Subcircuit**: `ALU2` (handles division/modulo)
+- **Selector**: `1n << 4n`
+- **Constraints**: 993 (566 non-linear + 427 linear)
 
-#### Special Cases
+**Special Cases**: Division by zero returns 0 (EVM convention)
 
-- Division by zero returns 0 (EVM convention)
-- Integer division (no decimals)
-
-#### Source Code
-
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:121-131`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L121-L131)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:48-61`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L48-L61)
-- Subcircuit Mapping: [`packages/frontend/synthesizer/src/tokamak/constant/constants.ts:56`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/constant/constants.ts#L56)
-
-#### Status
-
-✅ **Implemented** (Alpha)
+**Source**: [`functions.ts:121-131`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L121-L131) | [`handlers.ts:48-61`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L48-L61)
 
 ---
 
+<a id="0x0a-exp"></a>
+
+<a id="0x0a-exp"></a>
+
 ### 0x0a: EXP
 
-**Opcode**: `0x0a`  
-**Mnemonic**: `EXP`  
-**Gas**: 10 + 50 per byte of exponent  
 **Stack Input**: `base`, `exponent`  
 **Stack Output**: `base ^ exponent mod 2^256`
 
@@ -321,51 +278,51 @@ synthesizerArith('EXP', [base.value, exponent.value], result, runState);
 - **Selector**: `1n << 10n`
 - **Placements**: 1 DecToBit + up to 256 SubEXP placements (worst case)
 - **Constraints**:
-  - DecToBit: 258 constraints (256 non-linear + 2 linear)
-  - SubEXP: 803 constraints each
-  - **Worst case total: ~206,000 constraints** (most expensive operation)
+  - DecToBit: 258 (256 non-linear + 2 linear)
+  - SubEXP: 803 each
+  - **Worst case total: ~206,000** (most expensive operation)
 
-#### Example: 3^13
+#### Example: Computing 3^13
 
 ```
 13 = 0b1101 (binary)
 
 Circuit generation:
-1. SubEXP(3, 1) → 3       [bit 0]
-2. SubEXP(3, 3) → 9       [square]
-3. SubEXP(9, 9) → 81      [square]
-4. SubEXP(81, 3) → 243    [multiply, bit 2]
+1. SubEXP(3, 1) → 3         [bit 0 set]
+2. SubEXP(3, 3) → 9         [square]
+3. SubEXP(9, 9) → 81        [square]
+4. SubEXP(81, 3) → 243      [bit 2 set, multiply]
 5. SubEXP(243, 243) → 59049 [square]
-6. SubEXP(59049, 3) → 177147 [multiply, bit 3]
+6. SubEXP(59049, 3) → 177147 [bit 3 set, multiply]
 
 Result: 3^13 = 1594323
 ```
 
-#### Source Code
-
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:177-188`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L177-L188)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:141-156`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L141-L156)
-- Subcircuit Mapping: [`packages/frontend/synthesizer/src/tokamak/constant/constants.ts:62,80`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/constant/constants.ts#L62)
-
 #### Performance Notes
 
-- Most constraint-heavy arithmetic operation
+- ⚠️ Most constraint-heavy arithmetic operation
 - Number of placements proportional to bits set in exponent
 - Consider avoiding large exponents in zk-provable contracts
 
-#### Status
+#### Source Code
 
-✅ **Implemented** (Alpha)
+- EVM Handler: [`functions.ts:177-188`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L177-L188)
+- Synthesizer Handler: [`handlers.ts:141-156`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L141-L156)
+
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
 ## Comparison & Bitwise Operations
 
+<a id="0x10-lt"></a>
+
+<a id="0x10-lt"></a>
+
 ### 0x10: LT
 
-**Opcode**: `0x10`  
-**Mnemonic**: `LT` (Less Than)  
-**Gas**: 3  
+**Constraints**: 629 | **Status**: ✅ Implemented
+
 **Stack Input**: `a`, `b`  
 **Stack Output**: `1` if `a < b`, `0` otherwise
 
@@ -391,25 +348,56 @@ synthesizerArith('LT', [a.value, b.value], result, runState);
 - **Selector**: `1n << 16n`
 - **Inputs**: `[selector, a, b]`
 - **Outputs**: `[result]` (0 or 1)
-- **Constraints**: 629 constraints (594 non-linear + 35 linear)
+- **Constraints**: 629 (594 non-linear + 35 linear)
 
 #### Source Code
 
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:240-246`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L240-L246)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:167-175`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L167-L175)
-- Subcircuit Mapping: [`packages/frontend/synthesizer/src/tokamak/constant/constants.ts:64`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/constant/constants.ts#L64)
+- EVM Handler: [`functions.ts:240-246`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L240-L246)
+- Synthesizer Handler: [`handlers.ts:167-175`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L167-L175)
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
+<a id="0x11-gt"></a>
+
+### 0x11: GT
+
+**Constraints**: 629 | **Status**: ✅ Implemented
+
+**Stack Input**: `a`, `b`  
+**Stack Output**: `1` if `a > b`, `0` otherwise
+
+---
+
+<a id="0x12-slt"></a>
+
+### 0x12: SLT
+
+**Constraints**: 629 | **Status**: ✅ Implemented
+
+**Stack Input**: `a`, `b` (signed)  
+**Stack Output**: `1` if `a < b` (signed comparison), `0` otherwise
+
+---
+
+<a id="0x13-sgt"></a>
+
+### 0x13: SGT
+
+**Constraints**: 629 | **Status**: ✅ Implemented
+
+**Stack Input**: `a`, `b` (signed)  
+**Stack Output**: `1` if `a > b` (signed comparison), `0` otherwise
+
+---
+
+<a id="0x14-eq"></a>
+
 ### 0x14: EQ
 
-**Opcode**: `0x14`  
-**Mnemonic**: `EQ` (Equal)  
-**Gas**: 3  
+**Constraints**: 803 | **Status**: ✅ Implemented
+
 **Stack Input**: `a`, `b`  
 **Stack Output**: `1` if `a == b`, `0` otherwise
 
@@ -435,25 +423,34 @@ await synthesizerArith('EQ', [a.value, b.value], result, runState);
 - **Selector**: `1n << 20n`
 - **Inputs**: `[selector, a, b]`
 - **Outputs**: `[result]` (0 or 1)
-- **Constraints**: 803 constraints (same ALU1 subcircuit)
+- **Constraints**: 803 (same ALU1 subcircuit)
 
 #### Source Code
 
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:272-278`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L272-L278)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:207-215`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L207-L215)
-- Subcircuit Mapping: [`packages/frontend/synthesizer/src/tokamak/constant/constants.ts:68`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/constant/constants.ts#L68)
+- EVM Handler: [`functions.ts:272-278`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L272-L278)
+- Synthesizer Handler: [`handlers.ts:207-215`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L207-L215)
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
+<a id="0x15-iszero"></a>
+
+### 0x15: ISZERO
+
+**Constraints**: 803 | **Status**: ✅ Implemented
+
+**Stack Input**: `a`  
+**Stack Output**: `1` if `a == 0`, `0` otherwise
+
+---
+
+<a id="0x16-and"></a>
+
 ### 0x16: AND
 
-**Opcode**: `0x16`  
-**Mnemonic**: `AND` (Bitwise AND)  
-**Gas**: 3  
+**Constraints**: 774 | **Status**: ✅ Implemented
+
 **Stack Input**: `a`, `b`  
 **Stack Output**: `a & b` (bitwise)
 
@@ -476,14 +473,13 @@ await synthesizerArith('AND', [a.value, b.value], result, runState);
 #### Circuit Generation
 
 - **Subcircuit**: `AND` (dedicated bitwise circuit)
-- **Selector**: `undefined` (no selector, single-purpose circuit)
-- **Inputs**: `[a, b]`
+- **Inputs**: `[a, b]` (no selector)
 - **Outputs**: `[result]`
-- **Constraints**: 774 constraints (768 non-linear + 6 linear)
+- **Constraints**: 774 (768 non-linear + 6 linear)
 
 #### How It Works
 
-The AND subcircuit performs bitwise AND on 256-bit inputs:
+Performs bitwise AND on 256-bit inputs:
 
 ```
 Input A:  1010...
@@ -493,69 +489,85 @@ Output:   1000...  (A & B)
 
 #### Source Code
 
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:288-294`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L288-L294)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:227-234`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L227-L234)
-- Subcircuit Mapping: [`packages/frontend/synthesizer/src/tokamak/constant/constants.ts:70`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/constant/constants.ts#L70)
+- EVM Handler: [`functions.ts:288-294`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L288-L294)
+- Synthesizer Handler: [`handlers.ts:227-234`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L227-L234)
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
+<a id="0x17-or"></a>
+
 ### 0x17: OR
 
-**Opcode**: `0x17`  
-**Mnemonic**: `OR` (Bitwise OR)  
-**Gas**: 3  
+**Constraints**: 774 | **Status**: ✅ Implemented
+
 **Stack Input**: `a`, `b`  
 **Stack Output**: `a | b` (bitwise)
 
 #### Circuit Generation
 
 - **Subcircuit**: `OR` (dedicated bitwise circuit)
-- **Selector**: `undefined`
-- **Constraints**: 774 constraints (768 non-linear + 6 linear)
+- **Constraints**: 774 (768 non-linear + 6 linear)
 
 #### Source Code
 
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:237-244`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L237-L244)
+- Synthesizer Handler: [`handlers.ts:237-244`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L237-L244)
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
+<a id="0x18-xor"></a>
+
 ### 0x18: XOR
 
-**Opcode**: `0x18`  
-**Mnemonic**: `XOR` (Bitwise XOR)  
-**Gas**: 3  
+**Constraints**: 774 | **Status**: ✅ Implemented
+
 **Stack Input**: `a`, `b`  
 **Stack Output**: `a ^ b` (bitwise)
 
 #### Circuit Generation
 
 - **Subcircuit**: `XOR` (dedicated bitwise circuit)
-- **Selector**: `undefined`
-- **Constraints**: 774 constraints (768 non-linear + 6 linear)
+- **Constraints**: 774 (768 non-linear + 6 linear)
 
 #### Source Code
 
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:247-254`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L247-L254)
+- Synthesizer Handler: [`handlers.ts:247-254`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L247-L254)
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
+<a id="0x19-not"></a>
+
+### 0x19: NOT
+
+**Constraints**: 803 | **Status**: ✅ Implemented
+
+**Stack Input**: `a`  
+**Stack Output**: `~a` (bitwise NOT)
+
+---
+
+<a id="0x1a-byte"></a>
+
+### 0x1a: BYTE
+
+**Constraints**: 629 | **Status**: ✅ Implemented
+
+**Stack Input**: `i`, `x`  
+**Stack Output**: `x[i]` (i-th byte of x)
+
+---
+
+<a id="0x1b-shl"></a>
+
 ### 0x1b: SHL
 
-**Opcode**: `0x1b`  
-**Mnemonic**: `SHL` (Shift Left)  
-**Gas**: 3  
+**Constraints**: 629 | **Status**: ✅ Implemented
+
 **Stack Input**: `shift`, `value`  
 **Stack Output**: `value << shift`
 
@@ -581,26 +593,46 @@ await synthesizerArith('SHL', [a.value, b.value], result, runState);
 - **Selector**: `1n << 27n`
 - **Inputs**: `[selector, shift, value]`
 - **Outputs**: `[result]`
-- **Constraints**: 816 constraints (638 non-linear + 178 linear)
+- **Constraints**: 816 (638 non-linear + 178 linear)
 
 #### Source Code
 
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:278-286`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L278-L286)
-- Subcircuit Mapping: [`packages/frontend/synthesizer/src/tokamak/constant/constants.ts:75`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/constant/constants.ts#L75)
+- Synthesizer Handler: [`handlers.ts:278-286`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L278-L286)
 
-#### Status
+**Status**: ✅ Implemented (Alpha)
 
-✅ **Implemented** (Alpha)
+---
+
+<a id="0x1c-shr"></a>
+
+### 0x1c: SHR
+
+**Constraints**: 629 | **Status**: ✅ Implemented
+
+**Stack Input**: `shift`, `value`  
+**Stack Output**: `value >> shift`
+
+---
+
+<a id="0x1d-sar"></a>
+
+### 0x1d: SAR
+
+**Constraints**: 629 | **Status**: ✅ Implemented
+
+**Stack Input**: `shift`, `value`  
+**Stack Output**: `value >> shift` (signed)
 
 ---
 
 ## Cryptographic Operations
 
+<a id="0x20-keccak256"></a>
+
 ### 0x20: KECCAK256
 
-**Opcode**: `0x20`  
-**Mnemonic**: `KECCAK256` (SHA3)  
-**Gas**: 30 + 6 per word  
+**Constraints**: ~5000 | **Status**: ✅ Implemented
+
 **Stack Input**: `offset`, `size`  
 **Stack Output**: `keccak256(memory[offset:offset+size])`
 
@@ -644,7 +676,7 @@ if (length !== BIGINT_0) {
 - **Approach**:
   1. Track input symbols (DataPts from memory)
   2. Compute hash externally (standard Keccak256)
-  3. Load result as auxiliary input (loadAndStoreKeccak)
+  3. Load result as auxiliary input
   4. Circuit verifies correct inputs were hashed (not the hash itself)
 
 #### Why External?
@@ -657,31 +689,23 @@ Solution: Compute hash externally, verify inputs/outputs
 
 #### Source Code
 
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:190-197`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L190-L197)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:322-375`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L322-L375)
+- EVM Handler: [`functions.ts:190-197`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L190-L197)
+- Synthesizer Handler: [`handlers.ts:322-375`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L322-L375)
 
-#### Status
-
-✅ **Implemented** (Alpha) - External processing
+**Status**: ✅ Implemented (Alpha) - External processing
 
 ---
 
 ## Environmental Information
 
+<a id="0x30-address"></a>
+
 ### 0x30: ADDRESS
 
-**Opcode**: `0x30`  
-**Mnemonic**: `ADDRESS`  
-**Gas**: 2  
-**Stack Input**: (none)  
+**Constraints**: ~100 | **Status**: ✅ Implemented
+
+**Stack Input**: `-`  
 **Stack Output**: `address(this)` (current contract address)
-
-#### Standard EVM Behavior
-
-```typescript
-const address = bytesToBigInt(runState.interpreter.getAddress());
-stack.push(address);
-```
 
 #### Synthesizer Behavior
 
@@ -691,54 +715,27 @@ await synthesizerEnvInf('ADDRESS', runState);
 
 #### Circuit Generation
 
-- **Type**: Environmental Information
-- **Processing**: Load from public inputs via buffer system
 - **Buffer**: `PUB_IN` (Placement 0)
 - **Flow**:
   1. External value (contract address) → PUB_IN buffer
   2. Buffer creates DataPt symbol
   3. Symbol pushed to StackPt
-  4. Permutation connects buffer output to usage site
 
 #### Source Code
 
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:355-358`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L355-L358)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:377-382`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L377-L382)
+- EVM Handler: [`functions.ts:355-358`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L355-L358)
+- Synthesizer Handler: [`handlers.ts:377-382`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L377-L382)
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
-### 0x33: CALLER
-
-**Opcode**: `0x33`  
-**Mnemonic**: `CALLER`  
-**Gas**: 2  
-**Stack Input**: (none)  
-**Stack Output**: `address(msg.sender)` (caller address)
-
-#### Circuit Generation
-
-- **Type**: Environmental Information
-- **Buffer**: `PUB_IN` (Placement 0)
-
-#### Source Code
-
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:402-408`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L402-L408)
-
-#### Status
-
-✅ **Implemented** (Alpha)
-
----
+<a id="0x35-calldataload"></a>
 
 ### 0x35: CALLDATALOAD
 
-**Opcode**: `0x35`  
-**Mnemonic**: `CALLDATALOAD`  
-**Gas**: 3  
+**Constraints**: ~100 | **Status**: ✅ Implemented
+
 **Stack Input**: `i` (byte offset in calldata)  
 **Stack Output**: `calldata[i:i+32]` (32 bytes, zero-padded if needed)
 
@@ -760,7 +757,6 @@ await synthesizerEnvInf('CALLDATALOAD', runState, undefined, pos);
 
 #### Circuit Generation
 
-- **Type**: Environmental Information
 - **Buffer**: `PUB_IN` (Placement 0) - Calldata is public
 - **Processing**:
   1. Load calldata value at position
@@ -770,22 +766,21 @@ await synthesizerEnvInf('CALLDATALOAD', runState, undefined, pos);
 
 #### Source Code
 
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:383-387`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L383-L387)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:418-425`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L418-L425)
+- EVM Handler: [`functions.ts:383-387`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L383-L387)
+- Synthesizer Handler: [`handlers.ts:418-425`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L418-L425)
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
+<a id="0x37-calldatacopy"></a>
+
 ### 0x37: CALLDATACOPY
 
-**Opcode**: `0x37`  
-**Mnemonic**: `CALLDATACOPY`  
-**Gas**: 3 + 3 per word copied  
+**Constraints**: ~100 | **Status**: ✅ Implemented
+
 **Stack Input**: `destOffset`, `offset`, `size`  
-**Stack Output**: (none, writes to memory)
+**Stack Output**: `-` (writes to memory)
 
 #### Standard EVM Behavior
 
@@ -861,6 +856,8 @@ MLOAD generates circuit to reconstruct first 32 bytes from calldata symbol.
 
 ## Block Information
 
+<a id="0x40-blockhash"></a>
+
 ### 0x40: BLOCKHASH
 
 **Opcode**: `0x40`  
@@ -885,6 +882,8 @@ MLOAD generates circuit to reconstruct first 32 bytes from calldata symbol.
 
 ---
 
+<a id="0x41-coinbase"></a>
+
 ### 0x41: COINBASE
 
 **Opcode**: `0x41`  
@@ -905,13 +904,14 @@ MLOAD generates circuit to reconstruct first 32 bytes from calldata symbol.
 
 ## Stack, Memory & Storage
 
+<a id="0x50-pop"></a>
+
 ### 0x50: POP
 
-**Opcode**: `0x50`  
-**Mnemonic**: `POP`  
-**Gas**: 2  
+**Constraints**: 0 | **Status**: ✅ Implemented
+
 **Stack Input**: `value`  
-**Stack Output**: (none, removes value)
+**Stack Output**: `-` (removes value)
 
 #### Synthesizer Behavior
 
@@ -925,17 +925,16 @@ stackPt.pop(); // Remove top DataPt from symbol stack
 - **Processing**: No circuit placement (pure stack manipulation)
 - **Constraints**: 0
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
+<a id="0x51-mload"></a>
+
 ### 0x51: MLOAD
 
-**Opcode**: `0x51`  
-**Mnemonic**: `MLOAD`  
-**Gas**: 3 + memory expansion  
+**Constraints**: ~5000 | **Status**: ✅ Implemented
+
 **Stack Input**: `offset`  
 **Stack Output**: `memory[offset:offset+32]`
 
@@ -967,64 +966,42 @@ if (dataAliasInfos.length > 0) {
 
 #### Circuit Generation
 
-- **Type**: Memory Operation
-- **Processing**: Data aliasing resolution
-- **Subcircuits Used**:
-  - `DecToBit`: Convert DataPts to bits
-  - `Accumulator`: Combine multiple DataPts with shifts/masks
-  - Bitwise circuits (AND, OR) for masking
-- **Constraints**: ~5,000 per DataPt involved
+- **Type**: Memory Operation with data aliasing resolution
+- **Subcircuits**: DecToBit, Accumulator, Bitwise (AND, OR)
+- **Constraints**: ~5,000 per overlapping DataPt
 
 #### Data Aliasing Example
 
 ```typescript
-// Scenario: Overlapping memory writes
+// Overlapping memory writes:
 1. MSTORE(0x00, 0xAAAA...AAAA)  // Write to 0x00-0x20
 2. MSTORE(0x10, 0xBBBB...BBBB)  // Overlapping write to 0x10-0x30
 3. MLOAD(0x00)                  // Load 0x00-0x20
 
-// MemoryPt tracks:
-// - dataPt1 (0xAAAA...AAAA) at 0x00-0x20
-// - dataPt2 (0xBBBB...BBBB) at 0x10-0x30
-
-// MLOAD(0x00) must reconstruct:
+// MLOAD must reconstruct:
 // Result = dataPt1[0x00-0x10] | dataPt2[0x10-0x20]
-//        = First 16 bytes of dataPt1 + First 16 bytes of dataPt2
 
 // Circuit:
-dataAliasInfos = [
-  { dataPt: dataPt1, shift: 0, masker: 0xFFFF...0000 },  // Use first 16 bytes
-  { dataPt: dataPt2, shift: 128, masker: 0x0000...FFFF } // Use first 16 bytes, shift left
-]
-
 result = (dataPt1 & mask1) | ((dataPt2 & mask2) << 128)
 ```
 
 #### Source Code
 
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:476-481`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L476-L481)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:632-648`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L632-L648)
+- EVM Handler: [`functions.ts:476-481`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L476-L481)
+- Synthesizer Handler: [`handlers.ts:632-648`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L632-L648)
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
+<a id="0x52-mstore"></a>
+
 ### 0x52: MSTORE
 
-**Opcode**: `0x52`  
-**Mnemonic**: `MSTORE`  
-**Gas**: 3 + memory expansion  
+**Constraints**: ~5000 | **Status**: ✅ Implemented
+
 **Stack Input**: `offset`, `value`  
-**Stack Output**: (none, writes to memory)
-
-#### Standard EVM Behavior
-
-```typescript
-const [offset, value] = stack.popN(2);
-memory.write(Number(offset), 32, bigIntToBytes(value, 32));
-```
+**Stack Output**: `-` (writes to memory)
 
 #### Synthesizer Behavior
 
@@ -1038,46 +1015,35 @@ memoryPt.write(Number(offset.value), 32, value);
 #### Circuit Generation
 
 - **Type**: Memory Operation
-- **Processing**: Record symbol in MemoryPt
-- **Timestamp**: Each MSTORE gets unique timestamp for aliasing resolution
-- **Constraints**: 0 (no circuit at write time, circuits generated on MLOAD)
+- **Processing**: Record symbol in MemoryPt with timestamp
+- **Constraints**: 0 (lazy - circuits generated on MLOAD)
 
 #### How MemoryPt Tracks State
 
 ```typescript
-MemoryPt: {
-  _storePt: Map<timestamp, {
-    memOffset: number,
-    containerSize: number,
-    dataPt: DataPt
-  }>,
-  _timeStamp: number  // Increments on each write
-}
+MemoryPt: Map<timestamp, { memOffset, containerSize, dataPt }>
 
-// Example:
+// Each MSTORE increments timestamp:
 MSTORE(0x00, dataPt1) → timestamp 0
 MSTORE(0x10, dataPt2) → timestamp 1
-MSTORE(0x20, dataPt3) → timestamp 2
-
-// Later MLOAD queries MemoryPt for overlaps
+// Later MLOAD queries for overlaps
 ```
 
 #### Source Code
 
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:483-489`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L483-L489)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:650-656`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L650-L656)
+- EVM Handler: [`functions.ts:483-489`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L483-L489)
+- Synthesizer Handler: [`handlers.ts:650-656`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L650-L656)
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
+<a id="0x54-sload"></a>
+
 ### 0x54: SLOAD
 
-**Opcode**: `0x54`  
-**Mnemonic**: `SLOAD`  
-**Gas**: 100/2100 (cold/warm)  
+**Constraints**: ~100 | **Status**: ✅ Implemented
+
 **Stack Input**: `key` (storage slot)  
 **Stack Output**: `storage[key]`
 
@@ -1085,8 +1051,7 @@ MSTORE(0x20, dataPt3) → timestamp 2
 
 ```typescript
 const key = stack.pop();
-const keyBytes = setLengthLeft(bigIntToBytes(key), 32);
-const value = await stateManager.getContractStorage(address, keyBytes);
+const value = await stateManager.getContractStorage(address, key);
 stack.push(bytesToBigInt(value));
 ```
 
@@ -1094,7 +1059,6 @@ stack.push(bytesToBigInt(value));
 
 ```typescript
 const keyPt = stackPt.pop();
-const key = setLengthLeft(bigIntToBytes(keyPt.value), 32);
 const value = await stateManager.getContractStorage(address, key);
 
 // Load storage value as private input
@@ -1110,8 +1074,7 @@ stackPt.push(valuePt);
 
 #### Circuit Generation
 
-- **Type**: Storage Operation
-- **Buffer**: `PRV_IN` (Placement 2) - Storage is private
+- **Buffer**: `PRV_IN` (Placement 2) - Storage is private by default
 - **Processing**:
   1. Read storage value from stateManager (external)
   2. Load value as DataPt via PRV_IN buffer
@@ -1120,48 +1083,40 @@ stackPt.push(valuePt);
 
 #### Why Private?
 
-Storage values are often sensitive (user balances, private state). The Synthesizer treats storage as private input by default, allowing users to prove execution without revealing storage contents.
+Storage values are often sensitive (user balances, private state). The Synthesizer treats storage as private input, allowing users to prove execution without revealing storage contents.
 
 #### Source Code
 
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:511-520`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L511-L520)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:672-689`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L672-L689)
+- EVM Handler: [`functions.ts:511-520`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L511-L520)
+- Synthesizer Handler: [`handlers.ts:672-689`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L672-L689)
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
+<a id="0x55-sstore"></a>
+
 ### 0x55: SSTORE
 
-**Opcode**: `0x55`  
-**Mnemonic**: `SSTORE`  
-**Gas**: Complex (see EIP-1283, EIP-2200)  
+**Constraints**: ~100 | **Status**: ✅ Implemented
+
 **Stack Input**: `key`, `value`  
-**Stack Output**: (none, writes to storage)
+**Stack Output**: `-` (writes to storage)
 
 #### Synthesizer Behavior
 
 ```typescript
 const [keyPt, valuePt] = stackPt.popN(2);
-const key = setLengthLeft(bigIntToBytes(keyPt.value), 32);
 
 // Store to state manager (external)
-await stateManager.putContractStorage(address, key, bigIntToBytes(valuePt.value, 32));
+await stateManager.putContractStorage(address, key, valuePt.value);
 
 // Record in PRV_OUT buffer
-synthesizer.storePrvOut(
-  address.toString(),
-  'Storage',
-  valuePt,
-  bytesToBigInt(key)
-);
+synthesizer.storePrvOut(address.toString(), 'Storage', valuePt, key);
 ```
 
 #### Circuit Generation
 
-- **Type**: Storage Operation
 - **Buffer**: `PRV_OUT` (Placement 3) - Private outputs
 - **Processing**:
   1. Write DataPt symbol to PRV_OUT buffer
@@ -1171,30 +1126,21 @@ synthesizer.storePrvOut(
 
 #### Source Code
 
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:522-548`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L522-L548)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:691-710`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L691-L710)
+- EVM Handler: [`functions.ts:522-548`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L522-L548)
+- Synthesizer Handler: [`handlers.ts:691-710`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L691-L710)
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
+<a id="0x60-0x7f-push1-push32"></a>
+
 ### 0x60-0x7f: PUSH1-PUSH32
 
-**Opcodes**: `0x60` - `0x7f`  
-**Mnemonic**: `PUSH1` - `PUSH32`  
-**Gas**: 3  
-**Stack Input**: (none)  
+**Constraints**: 0 | **Status**: ✅ Implemented
+
+**Stack Input**: `-`  
 **Stack Output**: `value` (from bytecode)
-
-#### Standard EVM Behavior
-
-```typescript
-const numToPush = opcode - 0x5f; // 0x60 → 1 byte, 0x7f → 32 bytes
-const value = bytesToBigInt(code.subarray(pc + 1, pc + 1 + numToPush));
-stack.push(value);
-```
 
 #### Synthesizer Behavior
 
@@ -1207,89 +1153,82 @@ const valuePt = synthesizer.loadAuxin(value, numToPush);
 stackPt.push(valuePt);
 ```
 
-#### Circuit Generation
-
-- **Type**: Hardcoded Input
-- **Processing**: `loadAuxin()` creates DataPt from constant
-- **Constraints**: 0 (constants don't need circuits)
-- **Note**: Auxiliary inputs are values that don't come from external sources
-
 #### Why loadAuxin?
 
-```typescript
-// PUSH values are hardcoded in bytecode, not from environment/storage
-// They're known at compile time, so treated as auxiliary inputs
+PUSH values are hardcoded in bytecode (not from environment/storage), so they're treated as auxiliary inputs:
 
-PUSH1 0x05  →  synthesizer.loadAuxin(5, 1)
-PUSH32 0xFFFF...  →  synthesizer.loadAuxin(0xFFFF..., 32)
+```typescript
+PUSH1 0x05        → synthesizer.loadAuxin(5, 1)
+PUSH32 0xFFFF...  → synthesizer.loadAuxin(0xFFFF..., 32)
 ```
+
+#### Circuit Generation
+
+- **Type**: Hardcoded constant
+- **Constraints**: 0 (constants don't need circuits)
 
 #### Source Code
 
-- EVM Handler: [`packages/frontend/synthesizer/src/opcodes/functions.ts:572-579`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L572-L579)
-- Synthesizer Handler: [`packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts:726-733`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L726-L733)
+- EVM Handler: [`functions.ts:572-579`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L572-L579)
+- Synthesizer Handler: [`handlers.ts:726-733`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L726-L733)
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
+<a id="0x80-0x8f-dup1-dup16"></a>
+
 ### 0x80-0x8f: DUP1-DUP16
 
-**Opcodes**: `0x80` - `0x8f`  
-**Mnemonic**: `DUP1` - `DUP16`  
-**Gas**: 3  
-**Stack Input**: `value` (at position n from top)  
-**Stack Output**: `value`, original stack (duplicates value)
+**Constraints**: 0 | **Status**: ✅ Implemented
+
+**Stack Input**: `...`  
+**Stack Output**: `value, ...` (duplicates value at position n from top)
 
 #### Synthesizer Behavior
 
 ```typescript
 const n = opcode - 0x7f; // 0x80 → 1, 0x8f → 16
-stackPt.dup(n); // Duplicate DataPt symbol at position n
+stackPt.dup(n); // Duplicate DataPt reference
 ```
 
 #### Circuit Generation
 
-- **Type**: Stack Operation
-- **Processing**: Duplicate DataPt reference (no circuit)
-- **Constraints**: 0
+- **Type**: Stack manipulation
+- **Constraints**: 0 (no circuit needed)
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
+<a id="0x90-0x9f-swap1-swap16"></a>
+
 ### 0x90-0x9f: SWAP1-SWAP16
 
-**Opcodes**: `0x90` - `0x9f`  
-**Mnemonic**: `SWAP1` - `SWAP16`  
-**Gas**: 3  
-**Stack Input**: `value1` (top), `value2` (at position n+1)  
-**Stack Output**: `value2`, ..., `value1` (swapped)
+**Constraints**: 0 | **Status**: ✅ Implemented
+
+**Stack Input**: `a, ..., b`  
+**Stack Output**: `b, ..., a` (swaps top with item at position n+1)
 
 #### Synthesizer Behavior
 
 ```typescript
 const n = opcode - 0x8f; // 0x90 → 1, 0x9f → 16
-stackPt.swap(n); // Swap top DataPt with DataPt at position n+1
+stackPt.swap(n); // Swap DataPt references
 ```
 
 #### Circuit Generation
 
-- **Type**: Stack Operation
-- **Processing**: Swap DataPt references (no circuit)
-- **Constraints**: 0
+- **Type**: Stack manipulation
+- **Constraints**: 0 (no circuit needed)
 
-#### Status
-
-✅ **Implemented** (Alpha)
+**Status**: ✅ Implemented (Alpha)
 
 ---
 
 ## Control Flow & System
+
+<a id="0x56-jump"></a>
 
 ### 0x56: JUMP
 
@@ -1319,6 +1258,8 @@ const destPt = stackPt.pop();
 
 ---
 
+<a id="0xf0-create"></a>
+
 ### 0xf0: CREATE
 
 **Opcode**: `0xf0`  
@@ -1341,6 +1282,8 @@ Contract creation requires:
 Planned for Beta release with batch transaction support.
 
 ---
+
+<a id="0xf3-return"></a>
 
 ### 0xf3: RETURN
 
@@ -1390,6 +1333,8 @@ if (lengthPt.value !== BIGINT_0) {
 
 ---
 
+<a id="0xfd-revert"></a>
+
 ### 0xfd: REVERT
 
 **Opcode**: `0xfd`  
@@ -1410,6 +1355,8 @@ Revert handling requires:
 Planned for Beta release.
 
 ---
+
+<a id="0xff-selfdestruct"></a>
 
 ### 0xff: SELFDESTRUCT
 
@@ -1604,7 +1551,7 @@ Note: Actual constraint counts depend on:
 
 ### 1. Minimize EXP Usage
 
-```solidity
+```javascript
 // ❌ Expensive in zk-SNARK
 uint result = base ** largeExponent;  // Up to ~206k constraints for 256-bit exponent
 
@@ -1614,7 +1561,7 @@ uint result = base * base * base;  // 3 × 803 = ~2.4k constraints
 
 ### 2. Batch Storage Operations
 
-```solidity
+```javascript
 // ❌ Multiple SLOAD/SSTORE
 for (uint i = 0; i < 10; i++) {
   storage[i] = value;  // 10 SSTORE → 1000 constraints
@@ -1630,7 +1577,7 @@ for (uint i = 0; i < 10; i++) {
 
 ### 3. Avoid Keccak256 in Loops
 
-```solidity
+```javascript
 // ❌ Expensive
 for (uint i = 0; i < 10; i++) {
   hash = keccak256(abi.encode(i));  // External processing overhead
