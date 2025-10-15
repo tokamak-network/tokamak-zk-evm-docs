@@ -2,12 +2,6 @@
 
 This document walks through how Synthesizer processes Ethereum transactions, showing the complete execution flow from input to output with practical examples.
 
-## What This Document Covers
-
-For detailed code references and implementation details, see the [Architecture documentation](./synthesizer/architecture.md) (coming soon).
-
-For conceptual explanations (What/Why), see the [main Synthesizer documentation](./synthesizer.md).
-
 ## Transaction Lifecycle Overview
 
 The following diagram shows the complete flow of a transaction through Synthesizer:
@@ -34,9 +28,9 @@ The following diagram shows the complete flow of a transaction through Synthesiz
 │─────────────│            ┌─────────────────┐           │              │
 │             │            │                 │           │   instance   │
 │   RPC Data  │            │  EVM + Symbol   │           │     .json    │
-│ (Block info)│            │   Execution     │           │              │
+│             │            │    Execution    │           │              │
 │ (On-demand) │            │                 │           │   placement  │
-│             │            │                 │           |   Variables  │
+│             │            │                 │           │   Variables  │
 └─────────────┘            │                 │           │      .json   │
                            │                 │           │              │
                            │                 │           │              │
