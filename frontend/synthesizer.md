@@ -16,7 +16,7 @@ Learn the fundamental concepts and high-level architecture.
 
 Follow the step-by-step execution flow from transaction input to output file generation.
 
-### 3. [Architecture](synthesizer/synthesizer-architecture.md)
+### 3. [Code Architecture](synthesizer/synthesizer-architecture.md)
 
 **Deep dive into code structure and implementation**
 

@@ -243,6 +243,30 @@ hr {
   margin: 24px 0;
 }
 
+/* Figure and figcaption styling */
+figure {
+  margin: 20px 0;
+  text-align: center;
+}
+
+figure img {
+  max-width: 100%;
+  height: auto;
+}
+
+figcaption {
+  text-align: center !important;
+  font-style: italic;
+  color: #6a737d;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+figcaption p {
+  margin: 0 !important;
+  text-align: center !important;
+}
+
 /* Status badges */
 strong {
   font-weight: 600;

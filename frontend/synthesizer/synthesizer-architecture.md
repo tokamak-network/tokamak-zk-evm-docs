@@ -1,4 +1,4 @@
-# Synthesizer: Architecture
+# Synthesizer: Code Architecture
 
 This document provides a detailed technical view of Synthesizer's internal structure, class relationships, and code-level implementation.
 
@@ -9,7 +9,6 @@ This document provides a detailed technical view of Synthesizer's internal struc
 - Design patterns and architectural decisions
 - Key code paths with file references
 - Implementation details for core mechanisms
-- Data structures and their purposes
 
 For conceptual explanations, see the [main Synthesizer documentation](./synthesizer.md).
 
@@ -24,9 +23,8 @@ For execution flow and examples, see the [Execution Flow documentation](./synthe
 3. [Core Architecture](#core-architecture)
 4. [Class Structure](#class-structure)
 5. [Key Components](#key-components)
-6. [Data Structures](#data-structures)
-7. [Design Patterns](#design-patterns)
-8. [Code Paths](#code-paths)
+6. [Design Patterns](#design-patterns)
+7. [Code Paths](#code-paths)
 
 ---
 
@@ -719,161 +717,6 @@ export class Finalizer {
 
 ---
 
-## Data Structures
-
-### DataPt (Data Point / Symbol)
-
-**Location**: `src/tokamak/types/dataPt.ts`
-
-**Purpose**: Represents a symbolic value in the circuit
-
-**Structure**:
-
-```typescript
-export type DataPt = {
-  source: number | 'literal';    // Placement ID that created this symbol
-  wireIndex: number;             // Wire index within that placement
-  value: bigint;                 // Actual value (for tracking)
-  sourceSize: number;            // Size hint for optimization
-};
-```
-
-**Example**:
-
-```typescript
-// Output of ADD operation (Placement 4)
-{
-  source: 4,        // Created by Placement 4
-  wireIndex: 0,     // First output wire
-  value: 15n,       // Result value
-  sourceSize: 256   // 256-bit word
-}
-```
-
----
-
-### Placement Entry
-
-**Location**: `src/tokamak/types/synthesizer.ts`
-
-**Purpose**: Represents a subcircuit instance
-
-**Structure**:
-
-```typescript
-export type PlacementEntry = {
-  name: SubcircuitNames;         // e.g., "ALU1", "bitify"
-  usage: ArithmeticOperator;     // e.g., "ADD", "MUL"
-  subcircuitId: number;          // Subcircuit library ID
-  inPts: DataPt[];               // Input symbols
-  outPts: DataPt[];              // Output symbols
-};
-```
-
-**Example**:
-
-```typescript
-// Placement 4: ADD operation
-{
-  name: "ALU1",
-  usage: "ADD",
-  subcircuitId: 4,
-  inPts: [
-    { source: 0, wireIndex: 5, value: 10n, ... },  // selector
-    { source: 2, wireIndex: 3, value: 5n, ... },   // operand 1
-    { source: 2, wireIndex: 4, value: 10n, ... }   // operand 2
-  ],
-  outPts: [
-    { source: 4, wireIndex: 0, value: 15n, ... }   // result
-  ]
-}
-```
-
----
-
-### StackPt vs Stack
-
-**Location**: `src/tokamak/pointers/stackPt.ts`
-
-**Purpose**: Parallel stacks for dual execution
-
-```typescript
-/**
- * Key differences between Stack and StackPt:
- *
- * 1. Data Type
- *    - Stack: bigint values
- *    - StackPt: DataPt symbols
- *
- * 2. Purpose
- *    - Stack: Actual EVM execution
- *    - StackPt: Symbolic execution / circuit tracking
- *
- * 3. Operation Handling
- *    - Stack: Performs operations on actual values
- *    - StackPt: Manages pointers for data flow tracking
- */
-
-// Stack (EVM)
-stack.push(15n);              // Push value
-
-// StackPt (Synthesizer)
-stackPt.push({                // Push symbol
-  source: 4,
-  wireIndex: 0,
-  value: 15n,
-  sourceSize: 256
-});
-```
-
----
-
-### MemoryPt (2D Memory Tracker)
-
-**Location**: `src/tokamak/pointers/memoryPt.ts`
-
-**Purpose**: Track memory writes with timestamp for aliasing resolution
-
-**Structure**:
-
-```typescript
-export class MemoryPt {
-  _storePt: TMemoryPt;          // Map<timeStamp, MemoryEntry>
-  private _timeStamp: number;   // Incremental counter
-
-  public storePt(memOffset: bigint, containerSize: number, dataPt: DataPt): void {
-    const timeStamp = this._timeStamp++;
-    this._storePt.set(timeStamp, {
-      memOffset,
-      containerSize,
-      dataPt
-    });
-  }
-
-  public getDataAlias(offset: bigint, size: number): DataAliasInfos {
-    // Find all overlapping writes
-    // Calculate shift and mask for each fragment
-    // Return reconstruction info
-  }
-}
-```
-
-**Example**:
-
-```
-Time 0: MSTORE at 0x00 (32 bytes) → symbol x
-Time 1: MSTORE at 0x10 (32 bytes) → symbol y
-Time 2: MLOAD at 0x00 (32 bytes)
-
-getDataAlias(0x00, 32) returns:
-[
-  { dataPt: x, shift: 0, masker: 0xFFFF...0000 },   // First 16 bytes
-  { dataPt: y, shift: 128, masker: 0x0000...FFFF }  // Last 16 bytes
-]
-```
-
----
-
 ## Design Patterns
 
 ### 1. Facade Pattern
@@ -1138,11 +981,13 @@ This architecture document provides a comprehensive technical view of Synthesize
 2. **Non-invasive Extension**: Built on top of EthereumJS without modifying core logic
 3. **Facade Pattern**: Synthesizer delegates to specialized handlers
 4. **Dual Execution**: EVM and Synthesizer process opcodes in parallel
-5. **Symbol Tracking**: DataPt symbols track data flow through circuit
-6. **Memory Aliasing**: MemoryPt's 2D structure resolves overlapping writes
-7. **Buffer System**: Clean interface between external values and internal symbols
-8. **Modular Design**: Clear separation of concerns across handlers
+5. **Modular Design**: Clear separation of concerns across handlers
 
-For usage examples and practical applications, see the [Execution Flow documentation](./synthesizer-execution-flow.md).
+---
 
-For conceptual background, see the [main Synthesizer documentation](./synthesizer.md).
+## Related Documentation
+
+- **[Data Structures](./synthesizer-data-structure.md)** - Detailed explanation of DataPt, StackPt, MemoryPt, and Placement
+- **[Execution Flow](./synthesizer-execution-flow.md)** - Usage examples and practical applications
+- **[Concepts](./synthesizer-concepts.md)** - Conceptual background and high-level architecture
+- **[Opcodes](./synthesizer-opcodes.md)** - EVM opcode implementation reference
