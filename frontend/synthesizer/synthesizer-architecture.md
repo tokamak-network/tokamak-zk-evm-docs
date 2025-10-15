@@ -2,30 +2,6 @@
 
 This document provides a detailed technical view of Synthesizer's internal structure, class relationships, and code-level implementation.
 
-## What This Document Covers
-
-- Code execution flow from initialization to finalization
-- Class structure and relationships
-- Design patterns and architectural decisions
-- Key code paths with file references
-- Implementation details for core mechanisms
-
-For conceptual explanations, see the [main Synthesizer documentation](./synthesizer.md).
-
-For execution flow and examples, see the [Execution Flow documentation](./synthesizer-execution-flow.md).
-
----
-
-## Table of Contents
-
-1. [Code Execution Overview](#code-execution-overview)
-2. [Repository Structure](#repository-structure)
-3. [Core Architecture](#core-architecture)
-4. [Class Structure](#class-structure)
-5. [Key Components](#key-components)
-6. [Design Patterns](#design-patterns)
-7. [Code Paths](#code-paths)
-
 ---
 
 ## Code Execution Overview
