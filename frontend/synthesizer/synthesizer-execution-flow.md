@@ -74,8 +74,8 @@ Before processing the transaction, Synthesizer prepares its environment:
 │  1. Compile Subcircuit Library (One-time setup)        │
 └────────────────────────────────────────────────────────┘
          │
-         │  $ cd packages/frontend/qap-compiler
-         │  $ ./scripts/compile.sh
+         │
+         │
          │
          ▼
     Generate .wasm files (subcircuit0.wasm ... subcircuitN.wasm)
@@ -86,7 +86,7 @@ Before processing the transaction, Synthesizer prepares its environment:
 │  2. Configure RPC Provider                             │
 └────────────────────────────────────────────────────────┘
          │
-         │  Set up Alchemy/Infura endpoint for Ethereum Mainnet
+         │  Set up RPC endpoint for Ethereum Mainnet
          │
          ▼
 ┌────────────────────────────────────────────────────────┐
@@ -103,7 +103,7 @@ Before processing the transaction, Synthesizer prepares its environment:
 
 1. **Subcircuit Library Compilation**: Circom compiles all the fundamental circuits (ALU1, bitify, XOR, etc.) into WebAssembly files. These are the building blocks that Synthesizer will use to construct the transaction-specific circuit.
 
-2. **RPC Connection**: Synthesizer connects to Ethereum Mainnet via RPC (Alchemy/Infura) to access blockchain state. This connection is essential because Synthesizer needs to:
+2. **RPC Connection**: Synthesizer connects to Ethereum Mainnet via RPC to access blockchain state. This connection is essential because Synthesizer needs to:
 
    - Fetch transaction details (from, to, data, value)
    - Access account states at the transaction's block height

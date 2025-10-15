@@ -6,6 +6,6 @@
   "styles": {
     "website": "styles/website.css"
   },
-  "plugins": ["-search", "fontsettings", "theme-default", "-highlight"],
+  "plugins": ["-search", "fontsettings", "theme-default", "highlight"],
   "pluginsConfig": {}
 }

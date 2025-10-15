@@ -33,7 +33,9 @@ Project Tokamak zk-EVM will serve as the foundation for a follow-up project, _To
 
 - The **Frontend**, powered by the Synthesizer, provides an intuitive graphical interface that allows even non-experts to convert Ethereum transaction or block validation logic into ZKP circuits. Users simply input a hash — no coding or knowledge of ZKPs is required. This simplicity will dramatically lower the technical barrier to building or operating a rollup.
 
-<figure><img src=".gitbook/assets/01.png" alt=""><figcaption><p>Playground GUI</p></figcaption></figure>
+![Playground GUI](.gitbook/assets/01.png)
+
+<p align="center"><em>Playground GUI</em></p>
 
 - The **Backend** features a lightweight prover that enables zk-proof generation on standard hardware. Unlike conventional systems that rely on high-performance or specialized machines, the Tokamak zk-EVM allows anyone to serve as a prover using an ordinary laptop.
 
@@ -47,7 +49,9 @@ In addition, Pre-SNARK and Post-SNARK consensus protocols are offered as optiona
 
 Project Tokamak zk-EVM addresses the problem of converting Ethereum block validation into ZKP proofs — a problem commonly tackled by what are known as zk-EVMs. Traditional zk-EVMs, however, are well known for being either difficult to use or expensive in terms of proof generation.
 
-<figure><img src="https://miro.medium.com/v2/resize:fit:1400/1*7Uw2YCmmzEi54NmpmmjayA.png" alt="" height="358" width="700"><figcaption><p>Ethereum transaction/block validation with zk-EVM</p></figcaption></figure>
+![Ethereum transaction/block validation with zk-EVM](https://miro.medium.com/v2/resize:fit:1400/1*7Uw2YCmmzEi54NmpmmjayA.png)
+
+<p align="center"><em>Ethereum transaction/block validation with zk-EVM</em></p>
 
 For example, Type-1 zk-EVMs, as defined by [Vitalik](https://vitalik.eth.limo/general/2022/08/04/zkevm.html) (e.g., Scroll), use a massive circuit that mimics the full EVM. These circuits pre-encode all the uncertainties involved in Ethereum block validation. While this approach avoids the need for preprocessing, the large circuit size leads to extremely high computational costs, requiring expensive and specialized hardware for proof generation.
 
@@ -76,7 +80,9 @@ Instead, our circuits are block- or transaction-specific and are designed more l
 2. [**synthesizer**](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/synthesizer) preprocesses a given block or transaction to determine which subcircuits to use and how they should be connected.
 3. [**prove and verify**](https://eprint.iacr.org/2024/507) combines the subcircuits into a final, purpose-built circuit ready for proof generation.
 
-<figure><img src=".gitbook/assets/제목 없음-2025-01-16-1247 (1).png" alt=""><figcaption><p>The path from transaction/block to ZKP proof generation</p></figcaption></figure>
+![The path from transaction/block to ZKP proof generation](.gitbook/assets/transaction-to-proof-path.png)
+
+<p align="center"><em>The path from transaction/block to ZKP proof generation</em></p>
 
 ### Advantages <a href="#bfd0" id="bfd0"></a>
 
@@ -148,6 +154,3 @@ Features of Tokamak zk-rollup (Tentative)
 - Ethereum can **partially verify** rollup transactions.
 - The channel can **continue** or be **dismantled** based on user demand.
 - **Multiple DApps** are supported on a single channel (known as a [general state channel](https://dl.acm.org/doi/10.1145/3243734.3243856)).
-
-\
-\

@@ -250,9 +250,7 @@ strong {
 
 /* Improve spacing for opcode detail sections */
 h3[id^="0x"] {
-  margin-top: 40px;
-  padding-top: 20px;
-  border-top: 1px solid #e1e4e8;
+  /* No extra spacing - let default h3 styles apply */
 }
 
 /* Add scroll padding for anchor links */
@@ -277,4 +275,19 @@ html {
   100% {
     background: transparent;
   }
+}
+
+/* Appendix: Subcircuit Mapping Table - specific column widths */
+#appendix-subcircuit-mapping-table + table th:nth-child(2),
+#appendix-subcircuit-mapping-table + table td:nth-child(2) {
+  width: 110px !important;
+  min-width: 110px !important;
+  max-width: 110px !important;
+}
+
+#appendix-subcircuit-mapping-table + table th:nth-child(6),
+#appendix-subcircuit-mapping-table + table td:nth-child(6) {
+  width: 80px !important;
+  min-width: 80px !important;
+  max-width: 80px !important;
 }

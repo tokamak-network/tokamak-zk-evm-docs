@@ -1,4 +1,4 @@
-# Synthesizer Architecture
+# Synthesizer: Architecture
 
 This document provides a detailed technical view of Synthesizer's internal structure, class relationships, and code-level implementation.
 
