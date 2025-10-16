@@ -216,10 +216,10 @@ This is the core of Synthesizer. For example, when processing `ADD`:
 **Synthesizer side:**
 
 1. Pops two symbols: `x`, `y` (where `x.value = 10`, `y.value = 5`)
-2. Creates a new placement: `MUL_placement = ALU1(x, y)`
-3. Creates output symbol: `z` (where `z.value = 15`, `z.source = MUL_placement`)
+2. Creates a new placement: `ADD_placement = ALU1(x, y)`
+3. Creates output symbol: `z` (where `z.value = 15`, `z.source = ADD_placement`)
 4. Pushes `z` to StackPt
-5. Records: `Placements[4] = { name: "ALU1", usage: "ADD", inputs: [x, y], outputs: [z] }`
+5. Records: `Placements[4] = { name: "ALU1", usage: "ADD", subcircuitId: 4, inPts: [x, y], outPts: [z] }`
 
 After every opcode, Synthesizer verifies that `Stack[i].value == StackPt[i].value` for all elements. This ensures the symbolic execution matches the actual execution.
 
