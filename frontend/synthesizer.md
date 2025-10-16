@@ -1,6 +1,6 @@
 # Synthesizer Documentation
 
-The Synthesizer is the core frontend of the Tokamak zk-EVM that converts Ethereum transactions into Tokamak zk-SNARK circuits. This documentation is organized into five main sections:
+The Synthesizer is the core frontend of the Tokamak zk-EVM that converts Ethereum transactions into Tokamak zk-SNARK circuits. This documentation is organized into six main sections:
 
 ---
 
@@ -20,7 +20,13 @@ Follow the step-by-step execution flow from transaction input to output file gen
 
 **Deep dive into code structure and implementation**
 
-Explore the detailed code architecture, core classes, and integration points with EthereumJS.
+Explore the detailed code architecture, core classes, and integration points with EthereumJS. Includes:
+
+- Transaction processing flow
+- Repository structure
+- Class structure and relationships
+- Practical code examples
+- **Output file format reference**
 
 ### 4. [Data Structures](synthesizer/synthesizer-data-structure.md)
 
