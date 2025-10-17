@@ -4,7 +4,7 @@ This document describes how the Tokamak Synthesizer handles each EVM opcode, com
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Overview](#overview)
   - Standard EVM vs Synthesizer
@@ -654,7 +654,7 @@ if (length !== BIGINT_0) {
 
 #### Circuit Generation
 
-- **Processing**: 🌐 **External** (hash computed outside circuit)
+- **Processing**: **External** (hash computed outside circuit)
 - **Tracking**: Input data symbols recorded in circuit
 - **Reason**: Keccak256 is too expensive to compute in-circuit (~100,000 constraints per hash)
 - **Approach**:
@@ -1271,28 +1271,6 @@ The Tokamak zk-EVM is designed specifically for Layer 2 state channel applicatio
 | **Exponentiation**      | 258 + (803 × bit_length)        | EXP (e.g., 3^13 = 3,470)      |
 | **Memory Operations**   | Variable                        | MLOAD, MSTORE (with aliasing) |
 | **External Operations** | 0 (processed outside)           | KECCAK256                     |
-
----
-
-## Related Resources
-
-### Tokamak zk-EVM Documentation
-
-- [Synthesizer Documentation](https://tokamak.notion.site/Synthesizer-documentation-164d96a400a3808db0f0f636e20fca24)
-- [Synthesizer Architecture](./synthesizer-architecture.md)
-- [Synthesizer Execution Flow](./synthesizer-execution-flow.md)
-
-### Source Code
-
-- [Tokamak zk-EVM Repository](https://github.com/tokamak-network/Tokamak-zk-EVM)
-- [QAP Compiler (Circom)](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler)
-- [Synthesizer Source](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/synthesizer)
-
-### Official Ethereum EVM Documentation
-
-- [Ethereum.org - EVM](https://ethereum.org/en/developers/docs/evm/)
-- [EVM Opcodes Reference (evm.codes)](https://www.evm.codes/)
-- [Yellow Paper](https://ethereum.github.io/yellowpaper/paper.pdf)
 
 ---
 

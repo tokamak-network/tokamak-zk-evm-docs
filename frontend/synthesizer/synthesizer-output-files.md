@@ -8,11 +8,11 @@ This document explains how to read and interpret the three output files generate
 
 After processing a transaction, Synthesizer generates three JSON files that contain all the information needed for proof generation:
 
-| File                      | Purpose                              | Used By              | Size (typical)  |
-| ------------------------- | ------------------------------------ | -------------------- | --------------- |
-| `permutation.json`        | Circuit topology (wire connections)  | Setup, Prove, Verify | ~2-10 KB        |
-| `instance.json`           | Public/private I/O witness           | Prove, Verify        | ~10-100 KB      |
-| `placementVariables.json` | Complete witness for all subcircuits | Prove                | ~100 KB - 10 MB |
+| File                      | Purpose                              | Used By              |
+| ------------------------- | ------------------------------------ | -------------------- |
+| `permutation.json`        | Circuit topology (wire connections)  | Setup, Prove, Verify |
+| `instance.json`           | Public/private I/O witness           | Prove, Verify        |
+| `placementVariables.json` | Complete witness for all subcircuits | Prove                |
 
 ---
 
@@ -50,13 +50,20 @@ Describes **how wires are connected** between placements (subcircuit instances).
 
 ### Reading the Format
 
-**Key Pattern**: Entries come in **3-entry cycles** representing one wire connection:
+**Key Pattern**: Entries come in **N-entry cycles** (where N = number of wires sharing the same value):
 
 ```
-Entry 1: (row, col) → (X, Y)    // Source wire → Destination wire
-Entry 2: (X, Y) → (X', Y')      // Intermediate connection
-Entry 3: (X', Y') → (row, col)  // Cycle back to source
+Example: 3-entry cycle (when 3 wires share the same value)
+Entry 1: (row, col) → (X, Y)    // Wire 1 → Wire 2
+Entry 2: (X, Y) → (X', Y')      // Wire 2 → Wire 3
+Entry 3: (X', Y') → (row, col)  // Wire 3 → Wire 1 (cycle back)
 ```
+
+**Important**: The cycle size depends on how many placements use the same wire value:
+
+- 2 wires sharing a value → 2-entry cycle
+- 3 wires sharing a value → 3-entry cycle
+- N wires sharing a value → N-entry cycle
 
 **Coordinate System**:
 
@@ -64,47 +71,110 @@ Entry 3: (X', Y') → (row, col)  // Cycle back to source
 - `row` = Wire index within a placement
 - `col` = Placement ID (subcircuit instance number)
 
-**Example Interpretation**:
+**Example: 3-Entry Cycle**
 
 ```json
-// Connection: Wire 100 from Placement 2 (PRV_IN) → Wire 619 in Placement 26
-{ "row": 100, "col": 2, "X": 619, "Y": 26 },
-{ "row": 619, "col": 26, "X": 619, "Y": 27 },
-{ "row": 619, "col": 27, "X": 100, "Y": 2 }
+// Wire 100 is shared by 3 placements: (100,2), (619,26), (619,27)
+{ "row": 100, "col": 2, "X": 619, "Y": 26 },    // Wire 1 → Wire 2
+{ "row": 619, "col": 26, "X": 619, "Y": 27 },   // Wire 2 → Wire 3
+{ "row": 619, "col": 27, "X": 100, "Y": 2 }     // Wire 3 → Wire 1
 ```
 
-Means:
+Interpretation:
 
 1. **Placement 2** (PRV_IN buffer), **wire 100** outputs a value
-2. This value connects to **Placement 26**, **wire 619** (input)
-3. The cycle ensures wire equality: `PRV_IN[100] == Placement26[619]`
+2. This value is used by **Placement 26** (wire 619) and **Placement 27** (wire 619)
+3. The 3-entry cycle ensures: `Placement2[100] == Placement26[619] == Placement27[619]`
 
-### Why 3-Entry Cycles?
+### How Placements are Grouped (Code-Based)
 
-The cycle structure is required by the Tokamak zk-SNARK proof system to enforce **wire equality constraints**. Each cycle creates a constraint that all three wire positions must have the same value, ensuring correct connections between placements.
+The grouping of placements into N-entry cycles happens in two main steps during finalization:
 
-### Common Patterns
+**Step 1: Build Permutation Groups** (`_buildPermGroup()`)
 
-**Buffer Connections** (Placement 0-3):
+```typescript
+// permutation.ts:441-562
+private _buildPermGroup(): Map<string, boolean>[] {
+  let permGroup: Map<string, boolean>[] = [];
 
-```json
-// PRV_IN (Placement 2) → Some placement
-{ "row": 104, "col": 2, "X": 616, "Y": 4 }
+  // 1. Create groups from output wires (representatives)
+  for (const placeId of this.placements.keys()) {
+    const thisPlacement = this.placements.get(placeId)!;
+    for (let i = 0; i < thisSubcircuitInfo.NOutWires; i++) {
+      const placementWireId = {
+        placementId: placeId,           // e.g., 2 (PRV_IN)
+        globalWireId: globalWireId      // e.g., 100
+      };
+      const groupEntry = new Map();
+      groupEntry.set(JSON.stringify(placementWireId), true);
+      permGroup.push(groupEntry);  // New group created
+    }
+  }
+
+  // 2. Add input wires to their parent's group
+  for (const thisPlacementId of this.placements.keys()) {
+    const thisPlacement = this.placements.get(thisPlacementId)!;
+    for (let i = 0; i < thisSubcircuitInfo.NInWires; i++) {
+      const thisInPt = thisPlacement.inPts[i];
+
+      if (thisInPt.source !== thisPlacementId) {
+        // Find parent placement
+        const pointedPlacementId = thisInPt.source!;  // e.g., 2
+        const pointedOutputId = /* find matching output wire */;
+
+        // Add this wire to parent's group
+        searchInsert(pointedPlacementWireId, thisPlacementWireId, permGroup);
+      }
+    }
+  }
+
+  return permGroup;  // Groups of wires with same value
+}
 ```
 
-**Intermediate Connections** (Between subcircuits):
+**Result**: Groups like `[{placementId:2, wireId:100}, {placementId:26, wireId:619}, {placementId:27, wireId:619}]`
 
-```json
-// Output from Placement 617 → Input to Placement 619
-{ "row": 617, "col": 13, "X": 619, "Y": 19 }
+**Step 2: Generate N-Entry Cycles** (`_correctPermutation()`)
+
+```typescript
+// permutation.ts:368-418
+private _correctPermutation() {
+  let permutationFile = [];
+
+  for (const _group of this.permGroup) {
+    const group = [..._group.keys()];  // Array of wire IDs
+    const groupLength = group.length;  // N = number of wires sharing same value
+
+    if (groupLength > 1) {
+      // Create N-entry cycles: Wire1 → Wire2 → ... → WireN → Wire1
+      for (let i = 0; i < groupLength; i++) {
+        const element = JSON.parse(group[i]);
+        const nextElement = JSON.parse(group[(i + 1) % groupLength]);  // Cycle!
+
+        permutationFile.push({
+          row: element.globalWireId - setupParams.l,
+          col: element.placementId,
+          X: nextElement.globalWireId - setupParams.l,
+          Y: nextElement.placementId,
+        });
+      }
+    }
+  }
+
+  return permutationFile;  // N-entry cycles written to JSON
+}
 ```
 
-**Self-loops** (Within same placement):
+**Key Points**:
 
-```json
-// Wire 616 in Placement 4 → Wire 616 in Placement 15
-{ "row": 616, "col": 4, "X": 616, "Y": 15 }
-```
+- **Parent-Child Tracking**: During Phase 3 execution, each `DataPt` stores its parent via `source` and `wireIndex` fields
+- **Grouping**: Wires with the same value (parent and all children) are grouped together
+- **Cycle Size**: `groupLength` determines the number of entries (2, 3, 4, ... N)
+- **Cycle Generation**: `(i + 1) % groupLength` creates the circular structure (last → first)
+
+**Why N-Entry Cycles?**
+
+The cycle structure is required by the Tokamak zk-SNARK proof system to enforce **wire equality constraints**. Each cycle creates a constraint that all N wire positions in the cycle must have the same value, ensuring correct connections between placements.
 
 ---
 
@@ -147,21 +217,22 @@ Contains **input/output values** for the circuit, divided into public and privat
 
 1. **publicInputBuffer** (Placement 0 / PUB_IN):
 
-   - **Purpose**: External data that is publicly revealed
-   - **Examples**: calldata, block.number, msg.sender, Keccak hash outputs
-   - **Used by**: Verifier (public inputs to verify proof)
+   - **Purpose**: External data that is publicly revealed and brought INTO the circuit
+   - **Examples**: calldata, block.number, msg.sender, Keccak hash **outputs** (results computed externally and fed back into circuit)
+   - **Used by**: Both Prover and Verifier
 
 2. **publicOutputBuffer** (Placement 1 / PUB_OUT):
 
-   - **Purpose**: Circuit outputs that are publicly revealed
-   - **Examples**: return data, event logs, Keccak hash inputs
-   - **Used by**: Verifier (public outputs to verify proof)
+   - **Purpose**: Circuit data that is sent OUT to be processed externally
+   - **Examples**: return data, event logs, Keccak hash **inputs** (data to be hashed externally)
+   - **Used by**: Both Prover and Verifier
+   - **Why Keccak inputs are outputs**: Keccak256 is computed outside the circuit for efficiency. The circuit sends the data to hash (PUB_OUT), external system computes the hash, and the result comes back (PUB_IN)
 
 3. **privateInputBuffer** (Placement 2 / PRV_IN):
 
    - **Purpose**: External data that remains hidden
    - **Examples**: storage values, account state, bytecode constants
-   - **Used by**: Prover only (never revealed to verifier)
+   - **Used by**: Prover only
 
 4. **privateOutputBuffer** (Placement 3 / PRV_OUT):
    - **Purpose**: Circuit outputs that remain hidden
@@ -249,30 +320,46 @@ Contains **complete witness** for every placement (subcircuit instance). This in
 
 **Variable Ordering**:
 
-The order of `variables` array matches the Circom subcircuit's signal order:
+The `variables` array follows Circom's internal witness ordering:
 
-```circom
-// Example: ALU1 subcircuit
-template ALU1() {
-  signal input selector;    // variables[0]
-  signal input a;           // variables[1]
-  signal input b;           // variables[2]
-  signal output result;     // variables[3]
-  // ... internal signals  // variables[4+]
+```
+variables[0]              = constant 1 (always 0x01)
+variables[1..N_out]       = output signals
+variables[N_out+1..N_out+N_in] = input signals
+variables[N_out+N_in+1..] = internal signals
+```
+
+**Important**: Outputs come **before** inputs in the witness array (Circom convention).
+
+### Example: ALU1 Subcircuit
+
+```rust
+template ALU1_() {
+  signal input in[7];   // selector + 3x 256-bit inputs (2 limbs each)
+  signal output out[4]; // 2x 256-bit outputs (2 limbs each)
+  // ... internal signals
 }
 ```
 
-### Example: ADD Operation
+**Real Data Example**:
 
 ```json
 {
-  "subcircuitId": 4,  // ALU1 subcircuit
+  "subcircuitId": 4,
   "variables": [
-    "0x02",    // selector = ADD (0x02)
-    "0x0a",    // input a = 10
-    "0x14",    // input b = 20
-    "0x1e",    // output = 30
-    // ... internal calculation variables
+    "0x01",      // [0] constant 1
+    "0x01",      // [1] out[0] - first output limb
+    "0x00",      // [2] out[1] - second output limb
+    "0x00",      // [3] out[2] - (unused)
+    "0x00",      // [4] out[3] - (unused)
+    "0x200000",  // [5] in[0] - selector (2^21 = ISZERO opcode)
+    "0x00",      // [6] in[1] - first input, lower limb
+    "0x00",      // [7] in[2] - first input, upper limb
+    "0x00",      // [8] in[3] - second input, lower limb
+    "0x00",      // [9] in[4] - second input, upper limb
+    "0x00",      // [10] in[5] - third input, lower limb
+    "0x00",      // [11] in[6] - third input, upper limb
+    // [12+] hundreds of internal variables...
   ]
 }
 ```
@@ -280,140 +367,31 @@ template ALU1() {
 Interpretation:
 
 - Placement uses ALU1 subcircuit (ID 4)
-- Performs ADD operation (selector = 2)
-- Inputs: 10 + 20
-- Output: 30
-- Remaining variables are intermediate calculation steps
+- Performs ISZERO operation (selector = 0x200000 = 2^21)
+  - For selector value mappings, see [Appendix: Subcircuit Mapping Table](synthesizer-opcodes.md#appendix-subcircuit-mapping-table)
+- Input: 0x00 (256-bit zero, represented as two 0x00 limbs)
+  - **Why 2 limbs?** Circom uses a 254-bit finite field, but Ethereum uses 256-bit numbers. To handle this, 256-bit values are split into two 128-bit limbs (lower and upper) to avoid field overflow.
+- Output: 0x01 (256-bit one, represented as 0x01 lower limb, 0x00 upper limb)
+- Logic: ISZERO(0) = 1 (true, input is zero)
+- Variables [12+] contain intermediate calculation steps (bitify, comparisons, etc.)
 
 ### Subcircuit IDs
 
-Common subcircuit IDs (from `qap-compiler`):
+Complete subcircuit list (from [`qap-compiler/subcircuits/library/subcircuitInfo.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/library/subcircuitInfo.ts)):
 
-| ID  | Name         | Description             |
-| --- | ------------ | ----------------------- |
-| 0   | Buffer       | LOAD/RETURN buffers     |
-| 1   | PubHash      | Keccak256 (external)    |
-| 4   | ALU1         | ADD, SUB, MUL, DIV, MOD |
-| 5   | ALU2         | ADDMOD, MULMOD          |
-| 6   | ALU3         | EXP components          |
-| 7   | SHR, SHL     | Bit shifts              |
-| 8   | AND, OR, XOR | Bitwise operations      |
-| 9   | Comparators  | LT, GT, EQ              |
-| ... | ...          | ...                     |
-
----
-
-## How Files Work Together
-
-### 1. Circuit Topology (`permutation.json`)
-
-Defines **structure**: Which placements exist and how they connect.
-
-```
-Placement 2 (PRV_IN) → Placement 4 (ALU1) → Placement 1 (PUB_OUT)
-```
-
-### 2. I/O Witness (`instance.json`)
-
-Provides **boundary values**: Inputs and outputs at circuit edges.
-
-```
-PRV_IN[100] = 10
-PRV_IN[101] = 20
-PUB_OUT[0] = 30
-```
-
-### 3. Complete Witness (`placementVariables.json`)
-
-Fills in **internal values**: All intermediate calculations.
-
-```
-ALU1[selector] = ADD
-ALU1[a] = 10
-ALU1[b] = 20
-ALU1[result] = 30
-ALU1[intermediate_1] = ...
-ALU1[intermediate_2] = ...
-```
-
-### Proof Generation Flow
-
-```
-1. Setup Phase (using permutation.json):
-   - Build circuit structure
-   - Generate QAP polynomials
-   - Compute proving/verification keys
-
-2. Prove Phase (using all three files):
-   - Load circuit topology (permutation.json)
-   - Load I/O witness (instance.json)
-   - Load complete witness (placementVariables.json)
-   - Verify all R1CS constraints satisfied
-   - Generate zk-SNARK proof
-
-3. Verify Phase (using permutation.json + instance.json public parts):
-   - Load circuit structure
-   - Load public inputs/outputs only
-   - Verify proof against public data
-```
-
----
-
-## Practical Tips
-
-### Debugging Circuit Issues
-
-**Check permutation.json**:
-
-- Count 3-entry cycles: `totalEntries / 3 = number of wire connections`
-- Look for placement IDs 0-3: These are buffer connections
-- Trace a specific wire: Find all entries with matching `(row, col)`
-
-**Check instance.json**:
-
-- Verify buffer sizes: `inPts.length` should match expected inputs
-- Compare `valueHex` values: Ensure they match EVM execution results
-- Check `source` fields: Should reference valid placement IDs
-
-**Check placementVariables.json**:
-
-- Count placements: Should match number of subcircuit instantiations
-- Verify first variables: Often inputs/outputs (easier to validate)
-- Look for `0x00` patterns: May indicate unused wires or padding
-
-### Performance Analysis
-
-**Circuit Complexity**:
-
-```javascript
-// Count total constraints
-const totalPlacements = placementVariables.length;
-const avgConstraintsPerPlacement = 1000; // Varies by subcircuit
-const estimatedConstraints = totalPlacements * avgConstraintsPerPlacement;
-```
-
-**Memory Usage**:
-
-```javascript
-// Estimate proving memory
-const witnessSize = placementVariables.reduce((sum, p) =>
-  sum + p.variables.length, 0
-);
-const estimatedMemory = witnessSize * 32; // bytes
-```
-
----
-
-## Related Documentation
-
-- **[Transaction Flow](./synthesizer-transaction-flow.md)** - How these files are generated
-- **[Code Examples](./synthesizer-code-examples.md)** - Specific operation examples
-- **[Data Structures](./synthesizer-data-structure.md)** - DataPt, Placement types
-
----
-
-## Further Reading
-
-- **QAP Compiler**: Subcircuit library that defines subcircuit IDs and structures
-- **Backend Prover**: Rust implementation that consumes these files for proof generation
-- **Tokamak zk-SNARK Paper**: [https://eprint.iacr.org/2024/507](https://eprint.iacr.org/2024/507)
+| ID  | Name         | Description                                                | Inputs | Outputs |
+| --- | ------------ | ---------------------------------------------------------- | ------ | ------- |
+| 0   | bufferPubOut | Public output buffer (RETURN data, event logs)             | 40     | 40      |
+| 1   | bufferPubIn  | Public input buffer (calldata, tx data)                    | 20     | 20      |
+| 2   | bufferPrvOut | Private output buffer (storage updates)                    | 40     | 40      |
+| 3   | bufferPrvIn  | Private input buffer (storage values, bytecode)            | 512    | 512     |
+| 4   | ALU1         | ADD, MUL, SUB, EQ, ISZERO, NOT, SubEXP                     | 7      | 4       |
+| 5   | ALU2         | DIV, SDIV, MOD, SMOD, ADDMOD, MULMOD                       | 7      | 2       |
+| 6   | ALU3         | SHL, SHR, SAR (bit shifts)                                 | 7      | 2       |
+| 7   | ALU4         | LT, GT, SLT, SGT (comparisons)                             | 7      | 2       |
+| 8   | ALU5         | SIGNEXTEND, BYTE                                           | 7      | 2       |
+| 9   | OR           | Bitwise OR                                                 | 4      | 2       |
+| 10  | XOR          | Bitwise XOR                                                | 4      | 2       |
+| 11  | AND          | Bitwise AND                                                | 4      | 2       |
+| 12  | DecToBit     | Number to bit array conversion (for memory operations)     | 2      | 256     |
+| 13  | Accumulator  | Bit array to number conversion (for memory reconstruction) | 64     | 2       |

@@ -4,7 +4,7 @@ The frontend of Tokamak zk-EVM consists of compiler tools that convert Ethereum 
 
 ---
 
-## 📦 Components
+## Components
 
 ### [Synthesizer](synthesizer.md)
 
@@ -25,18 +25,17 @@ The Synthesizer is the main frontend compiler that processes Ethereum transactio
 
 ---
 
-## 🔗 Related Components
+## Related Components
 
 ### QAP Compiler
 
 The QAP Compiler manages the library of fundamental subcircuits used by the Synthesizer. These subcircuits implement EVM operations for 256-bit words.
 
 - [GitHub Repository](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler)
-- Subcircuits: ALU1-5, bitwise operations, memory operations
 
 ---
 
-## 📚 Additional Resources
+## Additional Resources
 
 - **Research Paper**: [Tokamak zk-SNARK](https://eprint.iacr.org/2024/507)
 - **Main Repository**: [Tokamak-zk-EVM](https://github.com/tokamak-network/Tokamak-zk-EVM)

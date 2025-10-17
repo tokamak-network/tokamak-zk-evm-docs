@@ -11,7 +11,7 @@ The following diagram shows the complete flow of a transaction through Synthesiz
 │                         SYNTHESIZER TRANSACTION FLOW                          │
 └──────────────────────────────────────────────────────────────────────────────┘
 
-    📥 INPUT                    ⚙️ PROCESSING                   📤 OUTPUT
+    INPUT                       PROCESSING                      OUTPUT
 
 ┌─────────────┐            ┌─────────────────┐           ┌──────────────┐
 │             │            │                 │           │              │
