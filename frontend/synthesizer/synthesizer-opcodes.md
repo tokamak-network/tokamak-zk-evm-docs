@@ -7,13 +7,8 @@ This document describes how the Tokamak Synthesizer handles each EVM opcode, com
 ## Table of Contents
 
 - [Overview](#overview)
-  - Standard EVM vs Synthesizer
-  - Key Differences
-  - Subcircuit Types
 - [All Opcodes](#all-opcodes)
-  - Quick reference table with all 31+ implemented opcodes
 - [Detailed Opcode Reference](#0x01-add)
-  - Individual opcode explanations with circuit generation details
 - [Circuit Complexity Summary](#circuit-complexity-summary)
 - [Related Resources](#related-resources)
 - [Appendix: Subcircuit Mapping Table](#appendix-subcircuit-mapping-table)
@@ -330,7 +325,7 @@ synthesizerArith('LT', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:240-246`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L240-L246) | [`handlers.ts:167-175`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L167-L175)
-- Circuit: [`ALU4_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU4_circuit.circom) | [`LessThan256 (compare_safe.circom)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom)
+- Circuit: [`ALU4 (alu_safe.circom:350-354)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L350-L354) | [`LessThan256 (compare_safe.circom:6-19)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L6-L19)
 
 ---
 
@@ -350,7 +345,7 @@ synthesizerArith('LT', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:248-254`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L248-L254) | [`handlers.ts:177-185`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L177-L185)
-- Circuit: [`ALU4_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU4_circuit.circom) | [`GreaterThan256 (compare_safe.circom)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom)
+- Circuit: [`ALU4 (alu_safe.circom:356-359)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L356-L359) | [`GreaterThan256 (compare_safe.circom:35-39)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L35-L39)
 
 ---
 
@@ -370,7 +365,7 @@ synthesizerArith('LT', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:256-262`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L256-L262) | [`handlers.ts:187-195`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L187-L195)
-- Circuit: [`ALU4_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU4_circuit.circom) | [`SignedLessThan256 (compare_safe.circom)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom)
+- Circuit: [`ALU4 (alu_safe.circom:361-395)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L361-L395) | [`SignedLessThan256 (compare_safe.circom:41-74)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L41-L74)
 
 ---
 
@@ -390,7 +385,7 @@ synthesizerArith('LT', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:264-270`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L264-L270) | [`handlers.ts:197-205`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L197-L205)
-- Circuit: [`ALU4_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU4_circuit.circom) | [`SignedGreaterThan256 (compare_safe.circom)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom)
+- Circuit: [`ALU4 (alu_safe.circom:397-400)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L397-L400) | [`SignedGreaterThan256 (compare_safe.circom:76-80)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L76-L80)
 
 ---
 
@@ -421,7 +416,7 @@ await synthesizerArith('EQ', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:272-278`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L272-L278) | [`handlers.ts:207-215`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L207-L215)
-- Circuit: [`ALU1 (alu_safe.circom:80-87)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L80-L87) | [`IsEqual256 (compare_safe.circom)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom)
+- Circuit: [`ALU1 (alu_safe.circom:80-87)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L80-L87) | [`IsEqual256 (compare_safe.circom:92-99)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L92-L99)
 
 ---
 
@@ -441,7 +436,7 @@ await synthesizerArith('EQ', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:280-286`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L280-L286) | [`handlers.ts:217-225`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L217-L225)
-- Circuit: [`ALU1 (alu_safe.circom:89-95)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L89-L95) | [`IsZero256 (compare_safe.circom)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom)
+- Circuit: [`ALU1 (alu_safe.circom:89-95)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L89-L95) | [`IsZero256 (compare_safe.circom:82-90)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L82-L90)
 
 ---
 
@@ -469,7 +464,7 @@ await synthesizerArith('AND', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:288-294`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L288-L294) | [`handlers.ts:227-234`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L227-L234)
-- Circuit: [`AND_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/AND_circuit.circom) | [`ALU_bitwise (alu_safe.circom:870-894)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L870-L894)
+- Circuit: [`ALU_bitwise (alu_safe.circom:870-880)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L870-L880) | [`And256 (bitwise_safe.circom:21-26)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/bitwise_safe.circom#L21-L26)
 
 ---
 
@@ -489,7 +484,7 @@ await synthesizerArith('AND', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:296-302`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L296-L302) | [`handlers.ts:237-244`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L237-L244)
-- Circuit: [`OR_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/OR_circuit.circom) | [`ALU_bitwise (alu_safe.circom:895-919)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L895-L919)
+- Circuit: [`ALU_bitwise (alu_safe.circom:882-892)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L882-L892) | [`Or256 (bitwise_safe.circom:14-19)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/bitwise_safe.circom#L14-L19)
 
 ---
 
@@ -509,7 +504,7 @@ await synthesizerArith('AND', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:304-310`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L304-L310) | [`handlers.ts:247-254`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L247-L254)
-- Circuit: [`XOR_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/XOR_circuit.circom) | [`ALU_bitwise (alu_safe.circom:920-944)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L920-L944)
+- Circuit: [`ALU_bitwise (alu_safe.circom:894-904)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L894-L904) | [`Xor256 (bitwise_safe.circom:7-12)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/bitwise_safe.circom#L7-L12)
 
 ---
 
@@ -529,7 +524,7 @@ await synthesizerArith('AND', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:312-318`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L312-L318) | [`handlers.ts:257-265`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L257-L265)
-- Circuit: [`ALU1 (alu_safe.circom:98-104)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L98-L104) | [`Not256_unsafe (arithmetic_unsafe_type1.circom)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/arithmetic_unsafe_type1.circom)
+- Circuit: [`ALU1 (alu_safe.circom:98-104)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L98-L104) | [`Not256_unsafe (arithmetic_unsafe_type1.circom:95-100)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/arithmetic_unsafe_type1.circom#L95-L100)
 
 ---
 
@@ -549,7 +544,7 @@ await synthesizerArith('AND', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:320-327`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L320-L327) | [`handlers.ts:268-276`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L268-L276)
-- Circuit: [`ALU5_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU5_circuit.circom)
+- Circuit: [`ALU5 (alu_safe.circom:444-453)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L444-L453)
 
 ---
 
@@ -577,7 +572,7 @@ await synthesizerArith('SHL', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:329-335`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L329-L335) | [`handlers.ts:278-286`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L278-L286)
-- Circuit: [`ALU3_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU3_circuit.circom)
+- Circuit: [`ALU3 (alu_safe.circom:266-276)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L266-L276)
 
 ---
 
@@ -597,7 +592,7 @@ await synthesizerArith('SHL', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:337-343`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L337-L343) | [`handlers.ts:288-296`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L288-L296)
-- Circuit: [`ALU3_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU3_circuit.circom)
+- Circuit: [`ALU3 (alu_safe.circom:278-287)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L278-L287)
 
 ---
 
@@ -617,7 +612,7 @@ await synthesizerArith('SHL', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:345-351`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L345-L351) | [`handlers.ts:298-306`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L298-L306)
-- Circuit: [`ALU3_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU3_circuit.circom)
+- Circuit: [`ALU3 (alu_safe.circom:289-301)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L289-L301)
 
 ---
 

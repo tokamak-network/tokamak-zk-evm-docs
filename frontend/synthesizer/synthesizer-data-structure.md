@@ -11,7 +11,6 @@ This document explains the core data structures used in the Tokamak Synthesizer 
 - [StackPt (Symbol Stack)](#stackpt-symbol-stack)
 - [MemoryPt (Symbol Memory)](#memorypt-symbol-memory)
 - [Placement](#placement)
-- [Related Resources](#related-resources)
 
 ---
 
@@ -678,15 +677,3 @@ logs        <──┘                                                          
                                                                            │
 storage[key]=15 <───── PRV_OUT (ID=3) <────────────────────────────────────┘
 ```
-
----
-
-## Related Resources
-
-### Tokamak zk-EVM Source Code
-
-- [DataPt Type Definition](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/types/synthesizer.ts#L48-L69)
-- [DataPointFactory](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/pointers/dataPointFactory.ts)
-- [StackPt Implementation](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/pointers/stackPt.ts)
-- [MemoryPt Implementation](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/pointers/memoryPt.ts)
-- [StateManager](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/handlers/stateManager.ts)

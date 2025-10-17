@@ -8,11 +8,11 @@ This document explains how to read and interpret the three output files generate
 
 After processing a transaction, Synthesizer generates three JSON files that contain all the information needed for proof generation:
 
-| File                      | Purpose                              | Used By              |
-| ------------------------- | ------------------------------------ | -------------------- |
-| `permutation.json`        | Circuit topology (wire connections)  | Setup, Prove, Verify |
-| `instance.json`           | Public/private I/O witness           | Prove, Verify        |
-| `placementVariables.json` | Complete witness for all subcircuits | Prove                |
+| File                      | Purpose                              |
+| ------------------------- | ------------------------------------ |
+| `permutation.json`        | Circuit topology (wire connections)  |
+| `instance.json`           | Public/private I/O witness           |
+| `placementVariables.json` | Complete witness for all subcircuits |
 
 ---
 
