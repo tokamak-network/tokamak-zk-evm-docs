@@ -437,13 +437,24 @@ html {
   display: none !important;
 }
 
-/* Responsive: hide TOC on small screens */
-@media (max-width: 1200px) {
-  .page-toc-enabled .book .book-body {
-    padding-right: 15px !important;
+/* When left menu is open: hide TOC below 1100px */
+@media (max-width: 1099px) {
+  body.page-toc-enabled .book.with-summary .book-body {
+    padding-right: 0 !important;
   }
 
-  .page-toc-enabled .page-toc {
+  body.page-toc-enabled .book.with-summary .page-toc {
+    display: none !important;
+  }
+}
+
+/* When left menu is closed: hide TOC below 800px */
+@media (max-width: 799px) {
+  body.page-toc-enabled .book .book-body {
+    padding-right: 0 !important;
+  }
+
+  body.page-toc-enabled .page-toc {
     display: none !important;
   }
 }
