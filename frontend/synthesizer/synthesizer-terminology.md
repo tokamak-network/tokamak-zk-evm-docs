@@ -386,17 +386,3 @@ The complete set of values for all wires in a circuit that satisfies all constra
 - **Placement witness**: All wire values for each subcircuit instance
 
 **See also**: [Instance](#instance), [placementVariables.json](./synthesizer-output-files.md#placementvariablesjson)
-
----
-
-**Related Documentation**:
-
-- [Synthesizer Concepts](./synthesizer-concepts.md)
-- [Data Structures](./synthesizer-data-structure.md)
-- [Output Files](./synthesizer-output-files.md)
-- [Opcode Reference](./synthesizer-opcodes.md)
-
----
-
-**Last Updated**: January 2025  
-**Maintained by**: [Tokamak Network](https://www.tokamak.network/)
