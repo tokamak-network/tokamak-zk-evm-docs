@@ -17,8 +17,8 @@ This document defines key terms and concepts specific to the Tokamak Synthesizer
 - [MemoryPt](#memorypt)
 - [Permutation](#permutation)
 - [Placement](#placement)
-- [PRV_IN / PRV_OUT](#prv_in--prv_out)
-- [PUB_IN / PUB_OUT](#pub_in--pub_out)
+- [PRV_IN and PRV_OUT](#prvin-and-prvout)
+- [PUB_IN and PUB_OUT](#pubin-and-pubout)
 - [QAP Compiler](#qap-compiler)
 - [R1CS](#r1cs)
 - [Selector](#selector)
@@ -55,7 +55,7 @@ Blockchain state data that is loaded through the PUB_IN buffer. Includes values 
 - `block.coinbase` (COINBASE)
 - `blockhash(n)` (BLOCKHASH)
 
-**See also**: [PUB_IN / PUB_OUT](#pub_in--pub_out)
+**See also**: [PUB_IN and PUB_OUT](#pubin-and-pubout)
 
 ---
 
@@ -70,7 +70,7 @@ Four special placements (IDs 0-3) that serve as interfaces between the external 
 - **2**: PRV_IN (Private Input Buffer)
 - **3**: PRV_OUT (Private Output Buffer)
 
-**See also**: [PUB_IN / PUB_OUT](#pub_in--pub_out), [PRV_IN / PRV_OUT](#prv_in--prv_out)
+**See also**: [PUB_IN and PUB_OUT](#pubin-and-pubout), [PRV_IN and PRV_OUT](#prvin-and-prvout)
 
 ---
 
@@ -140,7 +140,7 @@ Transaction environment data that is loaded through the PUB_IN buffer. Includes 
 - `tx.origin` (ORIGIN)
 - Calldata (CALLDATALOAD, CALLDATACOPY)
 
-**See also**: [PUB_IN / PUB_OUT](#pub_in--pub_out)
+**See also**: [PUB_IN and PUB_OUT](#pubin-and-pubout)
 
 ---
 
@@ -241,7 +241,7 @@ A specific instance of a subcircuit with concrete input and output DataPts. Each
 
 ---
 
-## PRV_IN / PRV_OUT
+## PRV_IN and PRV_OUT
 
 **PRV_IN (Placement 2)**: Converts external private values into circuit symbols. Used for sensitive inputs like storage values and account state that should remain hidden.
 
@@ -253,7 +253,7 @@ A specific instance of a subcircuit with concrete input and output DataPts. Each
 
 ---
 
-## PUB_IN / PUB_OUT
+## PUB_IN and PUB_OUT
 
 **PUB_IN (Placement 0)**: Converts external public values into circuit symbols. Used for publicly known inputs like calldata, block.number, msg.sender, and Keccak hash outputs.
 
