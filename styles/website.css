@@ -2,6 +2,18 @@
    CUSTOM STYLES FOR HONKIT
    ======================================== */
 
+/* ========================================
+   LEFT SIDEBAR NAVIGATION
+   ======================================== */
+
+/* Unified font size for all menu items */
+.book-summary ul.summary li a,
+.book-summary ul.summary li span {
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  padding: 8px 15px !important;
+}
+
 /* Tables - improve styling and make "View Details" links prominent */
 .markdown-section table,
 .book .book-body .page-wrapper .page-inner section.normal table,

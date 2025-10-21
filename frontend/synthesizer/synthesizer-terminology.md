@@ -42,20 +42,7 @@ Hardcoded constants from the bytecode that are loaded directly as DataPts withou
 PUSH1 0x20  // Loads 0x20 as auxiliary input
 ```
 
-**See also**: [DataPt](#datapt-data-point)
-
----
-
-## Block Info (BlkInf)
-
-Blockchain state data that is loaded through the PUB_IN buffer. Includes values like:
-
-- `block.number` (NUMBER)
-- `block.timestamp` (TIMESTAMP)
-- `block.coinbase` (COINBASE)
-- `blockhash(n)` (BLOCKHASH)
-
-**See also**: [PUB_IN and PUB_OUT](#pubin-and-pubout)
+**Related**: [DataPt](#datapt-data-point)
 
 ---
 
@@ -70,22 +57,7 @@ Four special placements (IDs 0-3) that serve as interfaces between the external 
 - **2**: PRV_IN (Private Input Buffer)
 - **3**: PRV_OUT (Private Output Buffer)
 
-**See also**: [PUB_IN and PUB_OUT](#pubin-and-pubout), [PRV_IN and PRV_OUT](#prvin-and-prvout)
-
----
-
-## Circom
-
-A domain-specific language for writing arithmetic circuits. All Tokamak subcircuits are written in Circom and compiled to R1CS constraints. Circom circuits define the mathematical relationships that must hold for a valid proof.
-
-**Key features**:
-
-- Signal-based programming model
-- Automatic constraint generation
-- WASM witness calculator generation
-- 254-bit finite field (BN254 curve)
-
-**See also**: [Subcircuit](#subcircuit), [R1CS](#r1cs)
+**Related**: [PUB_IN and PUB_OUT](#pubin-and-pubout), [PRV_IN and PRV_OUT](#prvin-and-prvout)
 
 ---
 
@@ -101,7 +73,7 @@ MSTORE(0x10, valueB)  // Overlaps at 0x10-0x20
 MLOAD(0x00)           // Must reconstruct: valueA[0x00-0x10] | valueB[0x10-0x20]
 ```
 
-**See also**: [MemoryPt](#memorypt)
+**Related**: [MemoryPt](#memorypt)
 
 ---
 
@@ -127,7 +99,7 @@ DataPts enable traceability of all data transformations throughout the circuit.
 }
 ```
 
-**See also**: [Wire](#wire), [Symbol Processing](#symbol-processing)
+**Related**: [Wire](#wire), [Symbol Processing](#symbol-processing)
 
 ---
 
@@ -140,7 +112,7 @@ Transaction environment data that is loaded through the PUB_IN buffer. Includes 
 - `tx.origin` (ORIGIN)
 - Calldata (CALLDATALOAD, CALLDATACOPY)
 
-**See also**: [PUB_IN and PUB_OUT](#pubin-and-pubout)
+**Related**: [PUB_IN and PUB_OUT](#pubin-and-pubout)
 
 ---
 
@@ -152,7 +124,7 @@ The component responsible for converting the Synthesizer's internal state (place
 2. Generates `instance.json` by extracting buffer values and creating witness arrays
 3. Generates `placementVariables.json` by calculating witnesses for each placement using WASM
 
-**See also**: [Output Files](./synthesizer-output-files.md)
+**Related**: [Output Files](./synthesizer-output-files.md)
 
 ---
 
@@ -165,7 +137,7 @@ The public and private input/output values for the circuit, stored in `instance.
 
 The instance is used by the Prover to generate the proof and by the Verifier to verify it.
 
-**See also**: [Witness](#witness), [instance.json](./synthesizer-output-files.md#instancejson)
+**Related**: [Witness](#witness), [instance.json](./synthesizer-output-files.md#instancejson)
 
 ---
 
@@ -181,7 +153,7 @@ Lower limb:    0x123456789ABCDEF0123456789ABCDEF0
 Upper limb:    0x123456789ABCDEF0123456789ABCDEF0
 ```
 
-**See also**: [Circom](#circom)
+**Related**: [Circom](#circom)
 
 ---
 
@@ -195,7 +167,7 @@ The symbolic equivalent of EVM memory that tracks all memory writes with timesta
 - Data aliasing resolution for overlapping memory regions
 - Lazy circuit generation (circuits created on MLOAD, not MSTORE)
 
-**See also**: [Data Aliasing](#data-aliasing)
+**Related**: [Data Aliasing](#data-aliasing)
 
 ---
 
@@ -215,7 +187,7 @@ A mechanism to enforce wire equality constraints across placements. Wires that c
 
 **Interpretation**: Wire 13 in Placement 1 → Wire 14 in Placement 3 → Wire 15 in Placement 2 → back to Wire 13 in Placement 1 (cycle complete).
 
-**See also**: [Wire](#wire), [Output Files](./synthesizer-output-files.md)
+**Related**: [Wire](#wire), [Output Files](./synthesizer-output-files.md)
 
 ---
 
@@ -237,7 +209,7 @@ A specific instance of a subcircuit with concrete input and output DataPts. Each
 }
 ```
 
-**See also**: [Subcircuit](#subcircuit), [DataPt](#datapt-data-point)
+**Related**: [Subcircuit](#subcircuit), [DataPt](#datapt-data-point)
 
 ---
 
@@ -249,7 +221,7 @@ A specific instance of a subcircuit with concrete input and output DataPts. Each
 
 **Usage**: Only the Prover has access to these values; they are never revealed to the Verifier.
 
-**See also**: [Buffer Placements](#buffer-placements)
+**Related**: [Buffer Placements](#buffer-placements)
 
 ---
 
@@ -261,21 +233,22 @@ A specific instance of a subcircuit with concrete input and output DataPts. Each
 
 **Usage**: Both Prover and Verifier have access to these values.
 
-**See also**: [Buffer Placements](#buffer-placements)
+**Related**: [Buffer Placements](#buffer-placements)
 
 ---
 
 ## QAP Compiler
 
-The component that compiles Circom subcircuits into Quadratic Arithmetic Programs (QAPs) and generates the necessary setup files for proof generation. The QAP Compiler produces:
+The component that compiles Circom subcircuits into Quadratic Arithmetic Programs (QAPs) and provides pre-defined circuits to the Synthesizer. The QAP Compiler produces:
 
 - WASM modules for witness calculation
 - Constraint information for each subcircuit
 - Setup parameters for the proof system
+- Pre-compiled subcircuit library (ALU1, ALU2, ALU3, etc.) ready for use by the Synthesizer
 
 **Repository**: [packages/frontend/qap-compiler](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler)
 
-**See also**: [Circom](#circom), [Subcircuit](#subcircuit)
+**Related**: [Circom](#circom), [Subcircuit](#subcircuit)
 
 ---
 
@@ -285,7 +258,7 @@ Rank-1 Constraint System - the mathematical representation of a circuit as a set
 
 **Key concept**: Wire 0 is always constant 1 in R1CS to enable expressing constant terms in constraints.
 
-**See also**: [Circom](#circom), [Witness](#witness)
+**Related**: [Circom](#circom), [Witness](#witness)
 
 ---
 
@@ -301,7 +274,7 @@ A value used to choose which operation within a multi-operation subcircuit shoul
 - EQ: `0x100000` (`1 << 20`)
 - ISZERO: `0x200000` (`1 << 21`)
 
-**See also**: [Subcircuit](#subcircuit), [Subcircuit Mapping Table](./synthesizer-opcodes.md#appendix-subcircuit-mapping-table)
+**Related**: [Subcircuit](#subcircuit), [Subcircuit Mapping Table](./synthesizer-opcodes.md#appendix-subcircuit-mapping-table)
 
 ---
 
@@ -311,23 +284,15 @@ The symbolic equivalent of the EVM stack. Instead of storing concrete values, St
 
 **Consistency check**: After each opcode, the Synthesizer verifies that `stack.values == stackPt.values` to ensure correctness.
 
-**See also**: [DataPt](#datapt-data-point), [Symbol Processing](#symbol-processing)
+**Related**: [DataPt](#datapt-data-point), [Symbol Processing](#symbol-processing)
 
 ---
 
 ## Subcircuit
 
-A reusable circuit template defined in Circom that implements a specific operation or set of operations. Subcircuits are compiled into WASM for witness generation. Common subcircuits include ALU1 (arithmetic), ALU4 (comparisons), and AND/OR/XOR (bitwise operations).
+A reusable circuit template defined in Circom that implements a specific operation or set of operations. Subcircuits are compiled into WASM for witness generation.
 
-**Example subcircuits**:
-
-- `ALU1`: ADD, MUL, SUB, EQ, ISZERO, NOT, SubEXP
-- `ALU2`: DIV, SDIV, MOD, SMOD, ADDMOD, MULMOD
-- `ALU3`: SHL, SHR, SAR
-- `ALU4`: LT, GT, SLT, SGT
-- `DecToBit`: Binary decomposition
-
-**See also**: [Placement](#placement), [Circom](#circom)
+**Related**: [Placement](#placement), [Circom](#circom)
 
 ---
 
@@ -340,7 +305,7 @@ The fundamental approach of the Synthesizer where all data is treated as symboli
 - **EVM**: `result = a + b` (values only)
 - **Synthesizer**: `resultPt = placement(ADD, [aPt, bPt])` (symbols with provenance)
 
-**See also**: [DataPt](#datapt-data-point)
+**Related**: [DataPt](#datapt-data-point)
 
 ---
 
@@ -348,7 +313,9 @@ The fundamental approach of the Synthesizer where all data is treated as symboli
 
 The core component that converts Ethereum transaction execution into zk-SNARK circuit representations. The Synthesizer runs in parallel with the standard EVM execution, tracking all operations as symbolic relationships rather than concrete values. It generates three output files: `permutation.json`, `instance.json`, and `placementVariables.json`.
 
-**See also**: [Synthesizer Documentation](https://tokamak.notion.site/Synthesizer-documentation-164d96a400a3808db0f0f636e20fca24)
+**Repository**: [packages/frontend/synthesizer](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/synthesizer)
+
+**Related**: [Synthesizer Concepts](./synthesizer-concepts.md), [Execution Flow](./synthesizer-execution-flow.md), [Official Documentation](https://tokamak.notion.site/Synthesizer-documentation-164d96a400a3808db0f0f636e20fca24)
 
 ---
 
@@ -356,7 +323,7 @@ The core component that converts Ethereum transaction execution into zk-SNARK ci
 
 A connection point in a circuit that carries a value. Each wire in a placement is identified by its wire index. Wires connect placements together, forming the circuit graph. The `permutation.json` file describes how wires are connected across placements.
 
-**See also**: [Wire Index](#wire-index), [Permutation](#permutation)
+**Related**: [Wire Index](#wire-index), [Permutation](#permutation)
 
 ---
 
@@ -371,7 +338,7 @@ A unique identifier for a wire within a specific placement. Wire indices start f
 3. Wires N+1-M: Input signals
 4. Wires M+1+: Internal signals
 
-**See also**: [Wire](#wire), [DataPt](#datapt-data-point)
+**Related**: [Wire](#wire), [DataPt](#datapt-data-point)
 
 ---
 
@@ -385,4 +352,4 @@ The complete set of values for all wires in a circuit that satisfies all constra
 - **Private witness** (`a_prv`): Values from PRV_IN and PRV_OUT buffers
 - **Placement witness**: All wire values for each subcircuit instance
 
-**See also**: [Instance](#instance), [placementVariables.json](./synthesizer-output-files.md#placementvariablesjson)
+**Related**: [Instance](#instance), [placementVariables.json](./synthesizer-output-files.md#placementvariablesjson)
