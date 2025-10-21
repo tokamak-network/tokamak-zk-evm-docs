@@ -80,7 +80,7 @@ Instead, our circuits are block- or transaction-specific and are designed more l
 2. [**synthesizer**](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/synthesizer) preprocesses a given block or transaction to determine which subcircuits to use and how they should be connected.
 3. [**prove and verify**](https://eprint.iacr.org/2024/507) combines the subcircuits into a final, purpose-built circuit ready for proof generation.
 
-![The path from transaction/block to ZKP proof generation](.gitbook/assets/transaction-to-proof-path.png)
+![The path from transaction/block to ZKP proof generation](./assets/flowchart.png)
 
 <p align="center"><em>The path from transaction/block to ZKP proof generation</em></p>
 

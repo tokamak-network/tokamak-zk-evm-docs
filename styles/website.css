@@ -3,6 +3,22 @@
    ======================================== */
 
 /* ========================================
+   LOGO IN SIDEBAR
+   ======================================== */
+
+/* Add logo at the top of the sidebar */
+.book-summary:before {
+  content: "";
+  display: block;
+  background-image: url("../assets/logo.svg");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  height: 60px;
+  margin: 20px 15px 15px 15px;
+}
+
+/* ========================================
    LEFT SIDEBAR NAVIGATION
    ======================================== */
 

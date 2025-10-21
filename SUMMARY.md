@@ -2,7 +2,8 @@
 
 ## GETTING STARTED
 
-- [Project Overview](README.md)
+- [Introduction](README.md)
+- [Installation & Setup](getting-started.md)
 
 ---
 

@@ -6,12 +6,18 @@
   "styles": {
     "website": "styles/website.css"
   },
+  "scripts": {
+    "website": "styles/page-toc.js"
+  },
   "plugins": ["-search", "fontsettings", "theme-default", "highlight"],
   "pluginsConfig": {
     "fontsettings": {
       "theme": "night",
       "family": "sans",
       "size": 1
+    },
+    "theme-default": {
+      "showLevel": false
     }
   }
 }
