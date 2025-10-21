@@ -3,6 +3,35 @@
    ======================================== */
 
 /* ========================================
+   HIDE SEPIA THEME OPTION
+   ======================================== */
+
+/* Hide Sepia theme button in theme selector */
+.dropdown-menu .buttons button[data-theme="1"],
+.dropdown-menu button[data-theme="sepia"],
+.dropdown-menu .color-theme-1,
+button.color-theme-1 {
+  display: none !important;
+}
+
+/* Alternative: Hide by position (2nd button in color theme row) */
+.dropdown-menu .buttons:last-child button:nth-child(2) {
+  display: none !important;
+}
+
+/* Align remaining theme buttons (White and Night) */
+.dropdown-menu .buttons:last-child {
+  display: flex !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+}
+
+.dropdown-menu .buttons:last-child button {
+  flex: 1 !important;
+  margin: 0 2px !important;
+}
+
+/* ========================================
    LOGO IN SIDEBAR
    ======================================== */
 
@@ -18,9 +47,30 @@
   margin: 20px 15px 15px 15px;
 }
 
+/* Use black logo for Sepia theme */
+.book.color-theme-2 .book-summary:before {
+  background-image: url("../assets/logo-black.svg");
+}
+
 /* ========================================
    LEFT SIDEBAR NAVIGATION
    ======================================== */
+
+/* Sidebar background colors for each theme */
+/* White theme */
+.book.color-theme-0 .book-summary {
+  background: #fafafa !important;
+}
+
+/* Sepia theme */
+.book.color-theme-1 .book-summary {
+  background: #f3ebca !important;
+}
+
+/* Night theme */
+.book.color-theme-2 .book-summary {
+  background: #1c1f2b !important;
+}
 
 /* Unified font size for all menu items */
 .book-summary ul.summary li a,
@@ -361,9 +411,23 @@ html {
   height: 100vh !important;
   overflow-y: auto !important;
   padding: 30px 20px !important;
-  background: inherit !important;
   border-left: 1px solid rgba(0, 0, 0, 0.07) !important;
   z-index: 100 !important;
+}
+
+/* White theme TOC background */
+.book.color-theme-0 .page-toc {
+  background: #ffffff !important;
+}
+
+/* Sepia theme TOC background */
+.book.color-theme-1 .page-toc {
+  background: #f3ebca !important;
+}
+
+/* Night theme TOC background */
+.book.color-theme-2 .page-toc {
+  background: #1c1f2b !important;
 }
 
 .page-toc-enabled .page-toc h2 {
