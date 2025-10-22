@@ -3,7 +3,7 @@
 ## GETTING STARTED
 
 - [Introduction](README.md)
-- [Packages & Repositories](packages-repositories.md)
+- [Packages](packages.md)
 
 ---
 

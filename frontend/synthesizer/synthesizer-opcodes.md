@@ -1,6 +1,6 @@
 # Synthesizer: Opcode Reference
 
-This document describes how the Tokamak Synthesizer handles each EVM opcode, comparing standard EVM behavior with circuit generation.
+This document describes how the Tokamak [Synthesizer](synthesizer-terminology.md#synthesizer) handles each EVM opcode, comparing standard EVM behavior with circuit generation.
 
 ---
 
@@ -29,16 +29,16 @@ This document describes how the Tokamak Synthesizer handles each EVM opcode, com
 
 ### Key Differences
 
-| Aspect           | Standard EVM               | Synthesizer                               |
-| ---------------- | -------------------------- | ----------------------------------------- |
-| **Processing**   | Value-based computation    | Symbol-based circuit generation           |
-| **Traceability** | Black box (input → output) | Transparent (input → placements → output) |
-| **Output**       | Final computation result   | Circuit representation + result           |
-| **Purpose**      | Execute transaction        | Generate zk-SNARK proof                   |
+| Aspect           | Standard EVM               | Synthesizer                                                                       |
+| ---------------- | -------------------------- | --------------------------------------------------------------------------------- |
+| **Processing**   | Value-based computation    | [Symbol-based](synthesizer-terminology.md#symbol-processing) circuit generation   |
+| **Traceability** | Black box (input → output) | Transparent (input → [placements](synthesizer-terminology.md#placement) → output) |
+| **Output**       | Final computation result   | Circuit representation + result                                                   |
+| **Purpose**      | Execute transaction        | Generate zk-SNARK proof                                                           |
 
 ### Subcircuit Types
 
-The Synthesizer uses pre-compiled subcircuits from the [QAP Compiler](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler):
+The Synthesizer uses pre-compiled [subcircuits](synthesizer-terminology.md#subcircuit) from the [QAP Compiler](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler):
 
 - **ALU1**: Basic arithmetic (ADD, MUL, SUB, EQ, ISZERO, NOT)
 - **ALU2**: Modular arithmetic (DIV, SDIV, MOD, SMOD, ADDMOD, MULMOD)
@@ -107,7 +107,7 @@ synthesizerArith('ADD', [a.value, b.value], result, runState);
 
 #### Circuit Generation
 
-- **Subcircuit**: `ALU1` | **Selector**: `1n << 1n`
+- **[Subcircuit](synthesizer-terminology.md#subcircuit)**: `ALU1` | **[Selector](synthesizer-terminology.md#selector)**: `1n << 1n`
 - **Constraints**: 803 (entire ALU1 subcircuit, 630 non-linear + 173 linear)
 
 **Source**:
@@ -240,7 +240,7 @@ EXP uses a two-phase approach implemented in [`placeExp()`](https://github.com/t
 - **SubEXP**: Repeated squaring and conditional multiplication
 - Lines 36-41: Loop through each bit of exponent
 - Each iteration: `synthesizer.placeArith('SubEXP', _inPts)`
-- SubEXP per iteration: 803 constraints (entire ALU1 subcircuit)
+- SubEXP per iteration: 803 constraints (entire ALU1 [subcircuit](synthesizer-terminology.md#subcircuit))
 - Number of iterations: bit length of exponent (max 256)
 
 **Why Two Subcircuits?**
@@ -653,9 +653,9 @@ if (length !== BIGINT_0) {
 - **Tracking**: Input data symbols recorded in circuit
 - **Reason**: Keccak256 is too expensive to compute in-circuit (~100,000 constraints per hash)
 - **Approach**:
-  1. Track input symbols (DataPts from memory)
+  1. Track input symbols ([DataPts](synthesizer-terminology.md#datapt-data-point) from memory)
   2. Compute hash externally (standard Keccak256)
-  3. Load result as auxiliary input
+  3. Load result as [auxiliary input](synthesizer-terminology.md#auxiliary-input-auxin)
   4. Circuit verifies correct inputs were hashed (not the hash itself)
 
 #### Why External?
@@ -689,11 +689,11 @@ await synthesizerEnvInf('ADDRESS', runState);
 
 #### Circuit Generation
 
-- **Buffer**: `PUB_IN` (Placement 0)
+- **[Buffer](synthesizer-terminology.md#buffer-placements)**: [`PUB_IN`](synthesizer-terminology.md#pub-in-and-pub-out) (Placement 0)
 - **Flow**:
   1. External value (contract address) → PUB_IN buffer
-  2. Buffer creates DataPt symbol
-  3. Symbol pushed to StackPt
+  2. Buffer creates [DataPt](synthesizer-terminology.md#datapt-data-point) symbol
+  3. Symbol pushed to [StackPt](synthesizer-terminology.md#stackpt)
 
 **Source**:
 
@@ -770,8 +770,8 @@ if (dataLength.value !== BIGINT_0) {
 - **Type**: Memory Operation + Environmental Information
 - **Processing**:
   1. Load calldata from PUB_IN buffer → DataPt
-  2. Write DataPt to MemoryPt (tracking memory state)
-  3. MemoryPt handles data aliasing if memory overlaps
+  2. Write DataPt to [MemoryPt](synthesizer-terminology.md#memorypt) (tracking memory state)
+  3. MemoryPt handles [data aliasing](synthesizer-terminology.md#data-aliasing) if memory overlaps
 - **Constraints**: ~100 (buffer) + ~5,000 per memory word (if memory circuits needed)
 
 #### Memory Aliasing Handling
@@ -974,7 +974,7 @@ stackPt.push(valuePt);
 
 #### Circuit Generation
 
-- **Buffer**: `PRV_IN` (Placement 2) - Storage is private by default
+- **Buffer**: [`PRV_IN`](synthesizer-terminology.md#prv-in-and-prv-out) (Placement 2) - Storage is private by default
 - **Processing**:
   1. Read storage value from stateManager (external)
   2. Load value as DataPt via PRV_IN buffer
@@ -1014,7 +1014,7 @@ synthesizer.storePrvOut(address.toString(), 'Storage', valuePt, key);
 
 #### Circuit Generation
 
-- **Buffer**: `PRV_OUT` (Placement 3) - Private outputs
+- **Buffer**: [`PRV_OUT`](synthesizer-terminology.md#prv-in-and-prv-out) (Placement 3) - Private outputs
 - **Processing**:
   1. Write DataPt symbol to PRV_OUT buffer
   2. Actual storage update happens externally
@@ -1049,7 +1049,7 @@ stackPt.push(valuePt);
 
 #### Why loadAuxin?
 
-PUSH values are hardcoded in bytecode (not from environment/storage), so they're treated as auxiliary inputs:
+PUSH values are hardcoded in bytecode (not from environment/storage), so they're treated as [auxiliary inputs](synthesizer-terminology.md#auxiliary-input-auxin):
 
 ```typescript
 PUSH1 0x05        → synthesizer.loadAuxin(5, 1)
@@ -1190,7 +1190,7 @@ if (lengthPt.value !== BIGINT_0) {
 #### Circuit Generation
 
 - **Type**: System Operation
-- **Buffer**: `PUB_OUT` (Placement 1) - Return data is public
+- **Buffer**: [`PUB_OUT`](synthesizer-terminology.md#pub-in-and-pub-out) (Placement 1) - Return data is public
 - **Processing**:
   1. Load return data from MemoryPt (with aliasing resolution)
   2. Generate circuits to reconstruct data

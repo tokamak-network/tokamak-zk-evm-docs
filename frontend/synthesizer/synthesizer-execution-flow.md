@@ -154,17 +154,17 @@ When you invoke Synthesizer, it creates the execution environment:
 
 **What happens here:**
 
-The EVM is instantiated with an attached Synthesizer. Think of it as running two virtual machines in parallel:
+The EVM is instantiated with an attached [Synthesizer](synthesizer-terminology.md#synthesizer). Think of it as running two virtual machines in parallel:
 
 - **Standard EVM**: Processes the transaction normally, updating stack/memory/storage
-- **Synthesizer**: Shadows the EVM execution, tracking everything as mathematical symbols
+- **Synthesizer**: Shadows the EVM execution, tracking everything as mathematical [symbols](synthesizer-terminology.md#symbol-processing)
 
 At this point:
 
-- The `Placements` map is empty (will be populated during execution)
-- Buffer placements (IDs 0-3) are pre-initialized for LOAD and RETURN operations
-- Both `Stack` and `StackPt` are empty
-- Both `Memory` and `MemoryPt` are empty
+- The [Placements](synthesizer-terminology.md#placement) map is empty (will be populated during execution)
+- [Buffer placements](synthesizer-terminology.md#buffer-placements) (IDs 0-3) are pre-initialized for LOAD and RETURN operations
+- Both `Stack` and [StackPt](synthesizer-terminology.md#stackpt) are empty
+- Both `Memory` and [MemoryPt](synthesizer-terminology.md#memorypt) are empty
 
 ---
 
@@ -216,9 +216,9 @@ This is the core of Synthesizer. For example, when processing `ADD`:
 **Synthesizer side:**
 
 1. Pops two symbols: `x`, `y` (where `x.value = 10`, `y.value = 5`)
-2. Creates a new placement: `ADD_placement = ALU1(x, y)`
+2. Creates a new [placement](synthesizer-terminology.md#placement): `ADD_placement = ALU1(x, y)`
 3. Creates output symbol: `z` (where `z.value = 15`, `z.source = ADD_placement`)
-4. Pushes `z` to StackPt
+4. Pushes `z` to [StackPt](synthesizer-terminology.md#stackpt)
 5. Records: `Placements[4] = { name: "ALU1", usage: "ADD", subcircuitId: 4, inPts: [x, y], outPts: [z] }`
 
 After every opcode, Synthesizer verifies that `Stack[i].value == StackPt[i].value` for all elements. This ensures the symbolic execution matches the actual execution.
@@ -278,14 +278,14 @@ Throughout execution, Synthesizer needs to convert between external values and i
 
 Buffers act as the **interface** between the external world (Ethereum state) and the internal circuit world (symbols):
 
-- **LOAD Buffer** (Placement IDs 0, 2): Takes concrete values and produces symbols
+- **LOAD Buffer** ([Placement](synthesizer-terminology.md#placement) IDs 0, 2): Takes concrete values and produces symbols
 
-  - Public inputs: calldata, block info, msg.sender (Placement 0)
-  - Private inputs: storage values, account states (Placement 2)
+  - Public inputs: calldata, block info, msg.sender ([PUB_IN](synthesizer-terminology.md#pub-in-and-pub-out) - Placement 0)
+  - Private inputs: storage values, account states ([PRV_IN](synthesizer-terminology.md#prv-in-and-prv-out) - Placement 2)
 
 - **RETURN Buffer** (Placement IDs 1, 3): Takes symbols and produces concrete outputs
-  - Public outputs: logs, return data (Placement 1)
-  - Private outputs: storage updates (Placement 3)
+  - Public outputs: logs, return data ([PUB_OUT](synthesizer-terminology.md#pub-in-and-pub-out) - Placement 1)
+  - Private outputs: storage updates ([PRV_OUT](synthesizer-terminology.md#prv-in-and-prv-out) - Placement 3)
 
 This is crucial for zero-knowledge proofs: public inputs/outputs are revealed, while private inputs/outputs remain hidden.
 
@@ -347,14 +347,14 @@ One of Synthesizer's most complex tasks is tracking overlapping memory writes:
 
 Traditional EVM simply overwrites memory and returns the latest value. But Synthesizer must prove **how** that value was computed from the original symbols.
 
-The 2D structure of `MemoryPt` (offset × time) allows Synthesizer to:
+The 2D structure of [MemoryPt](synthesizer-terminology.md#memorypt) (offset × time) allows Synthesizer to:
 
 1. Track all writes to each memory location
 2. Detect overlaps when reading
-3. Generate subcircuits (using SHR, SHL, AND, OR) to reconstruct the correct value
+3. Generate [subcircuits](synthesizer-terminology.md#subcircuit) (using SHR, SHL, AND, OR) to reconstruct the correct value
 4. Prove the reconstruction is correct
 
-This is why memory operations can generate multiple placements—they need to prove data aliasing.
+This is why memory operations can generate multiple [placements](synthesizer-terminology.md#placement)—they need to prove [data aliasing](synthesizer-terminology.md#data-aliasing).
 
 ---
 
@@ -435,23 +435,23 @@ After bytecode execution completes, Synthesizer generates the final output files
 
 **What happens here:**
 
-The Finalizer converts the `Placements` map into three critical files:
+The [Finalizer](synthesizer-terminology.md#finalizer) converts the `Placements` map into three critical files:
 
 1. **permutation.json**: Describes the circuit topology
 
-   - How subcircuit wires are connected
-   - PLONK-style Permutation Argument
+   - How subcircuit [wires](synthesizer-terminology.md#wire) are connected
+   - PLONK-style [Permutation](synthesizer-terminology.md#permutation) Argument
    - Used by Prove, Verify stages
 
 2. **instance.json**: Contains the actual input/output values
 
    - Public values are revealed (anyone can see)
    - Private values remain hidden (only prover knows)
-   - Contains both buffer data and complete witness arrays
+   - Contains both buffer data and complete [witness](synthesizer-terminology.md#witness) arrays
 
-3. **placementVariables.json**: Full witness for proof generation
-   - All intermediate values for each subcircuit
+3. **placementVariables.json**: Full [witness](synthesizer-terminology.md#witness) for proof generation
+   - All intermediate values for each [subcircuit](synthesizer-terminology.md#subcircuit)
    - Needed by the prover to satisfy constraints
-   - Maps to R1CS format used by Tokamak zk-SNARK
+   - Maps to [R1CS](synthesizer-terminology.md#r1cs) format used by Tokamak zk-SNARK
 
 These files are then passed to the backend Rust prover, which generates the actual zero-knowledge proof.

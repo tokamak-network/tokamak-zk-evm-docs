@@ -1,6 +1,6 @@
 # Synthesizer: Class Structure
 
-This document provides detailed information about Synthesizer's class structure, relationships, and implementation details.
+This document provides detailed information about [Synthesizer](synthesizer-terminology.md#synthesizer)'s class structure, relationships, and implementation details.
 
 ---
 
@@ -12,7 +12,7 @@ This document provides detailed information about Synthesizer's class structure,
 │  ┌────────────────────────────────────────────────────┐ │
 │  │  StateManager                                       │ │
 │  │  - placements: Map<number, PlacementEntry>         │ │
-│  │  - auxin: Auxin                                     │ │
+│  │  - auxin: Auxin (auxiliary inputs)                 │ │
 │  │  - storagePt, logPt, keccakPt, etc.                │ │
 │  │  - placementIndex: number                           │ │
 │  └────────────────────────────────────────────────────┘ │
@@ -128,7 +128,7 @@ export class StateManager {
 **Key Points**:
 
 - Single source of truth for all Synthesizer state
-- Placements 0-3 reserved for buffers
+- [Placements](synthesizer-terminology.md#placement) 0-3 reserved for [buffers](synthesizer-terminology.md#buffer-placements)
 - Placement IDs start from 4
 
 ---
@@ -137,7 +137,7 @@ export class StateManager {
 
 **Location**: `src/tokamak/core/handlers/operationHandler.ts`
 
-**Role**: Create placements for arithmetic/logic operations
+**Role**: Create [placements](synthesizer-terminology.md#placement) for arithmetic/logic operations
 
 **Key Method**:
 
@@ -220,7 +220,7 @@ public loadStorage(codeAddress: string, key: bigint, value: bigint): DataPt {
 
 **Location**: `src/tokamak/core/handlers/memoryManager.ts`
 
-**Role**: Resolve memory aliasing
+**Role**: Resolve [memory aliasing](synthesizer-terminology.md#data-aliasing)
 
 **Key Method**:
 
@@ -240,7 +240,7 @@ public placeMemoryToStack(dataAliasInfos: DataAliasInfos): DataPt {
 
 **Location**: `src/tokamak/core/handlers/bufferManager.ts`
 
-**Role**: Manage LOAD and RETURN buffer placements
+**Role**: Manage LOAD and RETURN [buffer placements](synthesizer-terminology.md#buffer-placements)
 
 **Key Methods**:
 

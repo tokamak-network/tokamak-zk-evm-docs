@@ -1,6 +1,6 @@
 # Synthesizer: Repository Structure
 
-This document provides a detailed overview of the Synthesizer codebase file structure and organization.
+This document provides a detailed overview of the [Synthesizer](synthesizer-terminology.md#synthesizer) codebase file structure and organization.
 
 ---
 
@@ -56,7 +56,7 @@ packages/frontend/synthesizer/src/
 #### `interpreter.ts`
 
 - **Purpose**: Bytecode execution engine
-- **Key Addition**: Dual state management (Stack/StackPt, Memory/MemoryPt)
+- **Key Addition**: Dual state management (Stack/[StackPt](synthesizer-terminology.md#stackpt), Memory/[MemoryPt](synthesizer-terminology.md#memorypt))
 - **Role**: Orchestrates opcode-by-opcode execution and consistency checks
 
 #### `constructors.ts`
@@ -82,7 +82,7 @@ packages/frontend/synthesizer/src/
 #### `opcodes/synthesizer/handlers.ts`
 
 - **Purpose**: Tokamak Synthesizer opcode handlers
-- **Role**: Circuit generation logic (symbol processing)
+- **Role**: Circuit generation logic ([symbol processing](synthesizer-terminology.md#symbol-processing))
 
 ---
 
@@ -108,7 +108,7 @@ packages/frontend/synthesizer/src/
 
 - **Purpose**: Circuit state management
 - **Key Data**:
-  - `placements` - Map of all subcircuit instances
+  - `placements` - Map of all [subcircuit](synthesizer-terminology.md#subcircuit) instances
   - `placementIndex` - Sequential ID counter
   - `subcircuitInfoByName` - Subcircuit metadata
 - **Role**: Central registry for circuit construction
@@ -119,7 +119,7 @@ packages/frontend/synthesizer/src/
 - **Key Methods**:
   - `placeArith()` - Map operations to subcircuits (ALU1, ALU2, etc.)
   - `createOutput()` - Generate output symbols
-- **Role**: Translates EVM operations to circuit placements
+- **Role**: Translates EVM operations to circuit [placements](synthesizer-terminology.md#placement)
 
 #### `tokamak/core/handlers/dataLoader.ts`
 
@@ -133,7 +133,7 @@ packages/frontend/synthesizer/src/
 
 #### `tokamak/core/handlers/memoryManager.ts`
 
-- **Purpose**: Memory operation and aliasing resolution
+- **Purpose**: Memory operation and [aliasing](synthesizer-terminology.md#data-aliasing) resolution
 - **Key Methods**:
   - `placeMemoryToStack()` - Load memory with aliasing
   - `combineMemorySlices()` - Reconstruct from fragments
@@ -143,10 +143,10 @@ packages/frontend/synthesizer/src/
 
 #### `tokamak/core/handlers/bufferManager.ts`
 
-- **Purpose**: LOAD/RETURN buffer management
+- **Purpose**: LOAD/RETURN [buffer](synthesizer-terminology.md#buffer-placements) management
 - **Key Methods**:
-  - `addWireToInBuffer()` - Add to input buffers (PUB_IN, PRV_IN)
-  - `addWireToOutBuffer()` - Add to output buffers (PUB_OUT, PRV_OUT)
+  - `addWireToInBuffer()` - Add to input buffers ([PUB_IN](synthesizer-terminology.md#pub-in-and-pub-out), [PRV_IN](synthesizer-terminology.md#prv-in-and-prv-out))
+  - `addWireToOutBuffer()` - Add to output buffers ([PUB_OUT](synthesizer-terminology.md#pub-in-and-pub-out), [PRV_OUT](synthesizer-terminology.md#prv-in-and-prv-out))
 - **Role**: Bridge between external values and internal symbols
 
 ---
@@ -165,7 +165,7 @@ packages/frontend/synthesizer/src/
 
 #### `tokamak/core/finalizer/permutation.ts`
 
-- **Purpose**: Wire map and witness generation
+- **Purpose**: [Wire](synthesizer-terminology.md#wire) map and [witness](synthesizer-terminology.md#witness) generation
 - **Key Methods**:
   - `buildPermutation()` - Create wire connection groups
   - `outputPermutation()` - Generate `permutation.json`
@@ -189,7 +189,7 @@ packages/frontend/synthesizer/src/
 #### `tokamak/pointers/stackPt.ts`
 
 - **Purpose**: Symbolic stack implementation
-- **Data Structure**: Array of `DataPt` symbols
+- **Data Structure**: Array of [DataPt](synthesizer-terminology.md#datapt-data-point) symbols
 - **Role**: Tracks stack operations symbolically
 
 #### `tokamak/pointers/memoryPt.ts`
@@ -197,7 +197,7 @@ packages/frontend/synthesizer/src/
 - **Purpose**: 2D memory tracking (offset × time)
 - **Data Structure**: `Map<timestamp, {memOffset, containerSize, dataPt}>`
 - **Key Method**: `getDataAlias()` - Identifies overlapping writes
-- **Role**: Enables memory aliasing resolution
+- **Role**: Enables memory [aliasing](synthesizer-terminology.md#data-aliasing) resolution
 
 #### `tokamak/pointers/dataPointFactory.ts`
 

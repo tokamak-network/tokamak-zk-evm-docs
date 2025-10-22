@@ -68,10 +68,10 @@ this.state.placements.set(this.state.getNextPlacementIndex(), placement);
 
 ### Key Concepts
 
-- **Dual Execution**: EVM and Synthesizer handlers execute in parallel
-- **Symbol Tracking**: Input values become DataPt symbols
-- **Subcircuit Mapping**: ADD operation maps to ALU1 subcircuit
-- **Placement Creation**: Each operation creates a circuit node
+- **Dual Execution**: EVM and [Synthesizer](synthesizer-terminology.md#synthesizer) handlers execute in parallel
+- **[Symbol](synthesizer-terminology.md#symbol-processing) Tracking**: Input values become [DataPt](synthesizer-terminology.md#datapt-data-point) symbols
+- **[Subcircuit](synthesizer-terminology.md#subcircuit) Mapping**: ADD operation maps to ALU1 subcircuit
+- **[Placement](synthesizer-terminology.md#placement) Creation**: Each operation creates a circuit node
 
 ---
 
@@ -139,9 +139,9 @@ public addWireToInBuffer(inPt: DataPt, placementId: number): DataPt {
 
 ### Key Concepts
 
-- **Buffer Placement**: PRV_IN buffer (Placement 2) converts external values to symbols
+- **[Buffer Placement](synthesizer-terminology.md#buffer-placements)**: [PRV_IN](synthesizer-terminology.md#prv-in-and-prv-out) buffer ([Placement](synthesizer-terminology.md#placement) 2) converts external values to [symbols](synthesizer-terminology.md#symbol-processing)
 - **Caching**: Warm storage accesses reuse existing symbols
-- **Symbol Creation**: External values become circuit-compatible DataPt symbols
+- **Symbol Creation**: External values become circuit-compatible [DataPt](synthesizer-terminology.md#datapt-data-point) symbols
 
 ---
 
@@ -194,9 +194,9 @@ public placeMemoryToStack(dataAliasInfos: DataAliasInfos): DataPt {
 
 ### Key Concepts
 
-- **Memory Aliasing**: Tracks overlapping memory writes over time
-- **Circuit Reconstruction**: Generates SHR, SHL, AND, OR placements to combine fragments
-- **2D Memory Model**: MemoryPt uses (offset × time) to track all writes
+- **[Memory Aliasing](synthesizer-terminology.md#data-aliasing)**: Tracks overlapping memory writes over time
+- **Circuit Reconstruction**: Generates SHR, SHL, AND, OR [placements](synthesizer-terminology.md#placement) to combine fragments
+- **2D Memory Model**: [MemoryPt](synthesizer-terminology.md#memorypt) uses (offset × time) to track all writes
 
 ### Example Scenario
 

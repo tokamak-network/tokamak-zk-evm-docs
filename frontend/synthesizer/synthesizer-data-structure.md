@@ -1,6 +1,6 @@
 # Synthesizer: Data Structures
 
-This document explains the core data structures used in the Tokamak Synthesizer for symbol processing and circuit generation.
+This document explains the core data structures used in the Tokamak [Synthesizer](synthesizer-terminology.md#synthesizer) for [symbol processing](synthesizer-terminology.md#symbol-processing) and circuit generation.
 
 ---
 
@@ -58,8 +58,8 @@ The Synthesizer uses **symbol-based processing** instead of value-based computat
 Each piece of data is represented as a **DataPt** (Data Point), which tracks:
 
 - **Value**: The actual data (bigint)
-- **Source**: Where the data came from (placement ID or external source)
-- **Wire Index**: Which output wire from the source subcircuit
+- **Source**: Where the data came from ([placement](synthesizer-terminology.md#placement) ID or external source)
+- **[Wire Index](synthesizer-terminology.md#wire-index)**: Which output [wire](synthesizer-terminology.md#wire) from the source [subcircuit](synthesizer-terminology.md#subcircuit)
 - **Metadata**: Type, size, and other context information
 
 ```typescript
@@ -101,7 +101,7 @@ DataPt is a **symbol** that represents data flowing through the circuit. Think o
 1. **Traceability**: Track where data originates (source placement, wire index)
 2. **Circuit Generation**: Connect subcircuit outputs to inputs via wire indices
 3. **Value Tracking**: Maintain actual values for consistency checks
-4. **External Interface**: Bridge between Ethereum state and circuit symbols
+4. **External Interface**: Bridge between Ethereum state and circuit [symbols](synthesizer-terminology.md#symbol-processing)
 
 ### Visual: DataPt Journey
 
@@ -223,7 +223,7 @@ synthesizer.storePrvOut(address, 'Storage', resultPt, storageKey);
 
 ### Concept
 
-StackPt is the **symbolic equivalent** of the EVM stack. While the EVM stack holds actual values for computation, StackPt holds DataPt symbols for tracking data flow:
+[StackPt](synthesizer-terminology.md#stackpt) is the **symbolic equivalent** of the EVM stack. While the EVM stack holds actual values for computation, StackPt holds DataPt symbols for tracking data flow:
 
 ```
 EVM Stack                          StackPt (Symbol Stack)
@@ -372,7 +372,7 @@ public pop(): DataPt {
 
 ### Concept
 
-MemoryPt is a **2D data structure** (offset × time) that solves the **data aliasing problem** in memory. Unlike EVM memory which only keeps the latest value, MemoryPt tracks all overlapping writes:
+MemoryPt is a **2D data structure** (offset × time) that solves the **[data aliasing problem](synthesizer-terminology.md#data-aliasing)** in memory. Unlike EVM memory which only keeps the latest value, MemoryPt tracks all overlapping writes:
 
 ```
 EVM Memory (1D)                  MemoryPt (2D: offset × time)
@@ -526,7 +526,7 @@ The `getDataAlias()` method returns information needed to reconstruct memory dat
 
 ### Concept
 
-A **Placement** is an **instance** of a subcircuit with specific input/output data. Think of it like an object created from a class:
+A **Placement** is an **instance** of a [subcircuit](synthesizer-terminology.md#subcircuit) with specific input/output data. Think of it like an object created from a class:
 
 ```
 Subcircuit (Template/Class)     Placement (Instance/Object)

@@ -123,12 +123,12 @@ constructor() {
 }
 ```
 
-**Buffer Placements (IDs 0-3):**
+**[Buffer Placements](synthesizer-terminology.md#buffer-placements) (IDs 0-3):**
 
-- **Placement 0 (`PUB_IN`)**: Public input buffer (calldata, block info, msg.sender)
-- **Placement 1 (`PUB_OUT`)**: Public output buffer (return data, logs)
-- **Placement 2 (`PRV_IN`)**: Private input buffer (storage, account state)
-- **Placement 3 (`PRV_OUT`)**: Private output buffer (storage updates)
+- **Placement 0 ([`PUB_IN`](synthesizer-terminology.md#pub-in-and-pub-out))**: Public input buffer (calldata, block info, msg.sender)
+- **Placement 1 ([`PUB_OUT`](synthesizer-terminology.md#pub-in-and-pub-out))**: Public output buffer (return data, logs)
+- **Placement 2 ([`PRV_IN`](synthesizer-terminology.md#prv-in-and-prv-out))**: Private input buffer (storage, account state)
+- **Placement 3 ([`PRV_OUT`](synthesizer-terminology.md#prv-in-and-prv-out))**: Private output buffer (storage updates)
 
 ---
 
@@ -188,7 +188,7 @@ this._runState = {
 **Dual State Structure:**
 
 - **EVM State**: `Stack`, `Memory` - Track actual execution values
-- **Synthesizer State**: `StackPt`, `MemoryPt` - Track symbolic representations
+- **[Synthesizer](synthesizer-terminology.md#synthesizer) State**: [`StackPt`](synthesizer-terminology.md#stackpt), [`MemoryPt`](synthesizer-terminology.md#memorypt) - Track [symbolic](synthesizer-terminology.md#symbol-processing) representations
 - Both states are maintained in parallel and verified for consistency
 
 ---
@@ -292,6 +292,8 @@ public placeArith(name: ArithmeticOperator, inPts: DataPt[]): DataPt[] {
   this.provider.place(subcircuitName, [selectorPt, ...inPts], [outPt], name);
   return [outPt];
 }
+
+// See also: [DataPt](synthesizer-terminology.md#datapt-data-point), [Subcircuit](synthesizer-terminology.md#subcircuit), [Selector](synthesizer-terminology.md#selector)
 ```
 
 **Opcode Processing Examples:**
@@ -375,23 +377,23 @@ async generateSubcircuitWitness(placement: PlacementEntry): Promise<bigint[]> {
 
 **Output Files:**
 
-1. **`permutation.json`** - Circuit topology (wire connections)
+1. **`permutation.json`** - Circuit topology ([wire](synthesizer-terminology.md#wire) connections)
 
-   - Describes how wires between placements are connected
-   - Uses 3-entry cycle structure for equality constraints
+   - Describes how wires between [placements](synthesizer-terminology.md#placement) are connected
+   - Uses N-entry cycle structure for equality constraints ([Permutation](synthesizer-terminology.md#permutation))
    - Used by Setup, Prove, Verify stages
    - Example: `{ row: 13, col: 1, X: 14, Y: 3 }` means wire 13 in Placement 1 connects to wire 14 in Placement 3
 
-2. **`instance.json`** - Public/Private I/O values
+2. **`instance.json`** - Public/Private I/O values ([Instance](synthesizer-terminology.md#instance))
 
-   - Public input/output from `PUB_IN`/`PUB_OUT` buffers
-   - Private input/output from `PRV_IN`/`PRV_OUT` buffers
-   - Complete witness arrays (`a_pub`, `a_prv`)
+   - Public input/output from [`PUB_IN`](synthesizer-terminology.md#pub-in-and-pub-out)/[`PUB_OUT`](synthesizer-terminology.md#pub-in-and-pub-out) buffers
+   - Private input/output from [`PRV_IN`](synthesizer-terminology.md#prv-in-and-prv-out)/[`PRV_OUT`](synthesizer-terminology.md#prv-in-and-prv-out) buffers
+   - Complete [witness](synthesizer-terminology.md#witness) arrays (`a_pub`, `a_prv`)
    - Used by Prove stage
 
-3. **`placementVariables.json`** - Complete witness for all placements
-   - All intermediate values for each subcircuit instance
-   - Needed by prover to satisfy R1CS constraints
+3. **`placementVariables.json`** - Complete [witness](synthesizer-terminology.md#witness) for all [placements](synthesizer-terminology.md#placement)
+   - All intermediate values for each [subcircuit](synthesizer-terminology.md#subcircuit) instance
+   - Needed by prover to satisfy [R1CS](synthesizer-terminology.md#r1cs) constraints
    - Maps to Tokamak zk-SNARK format
 
 **For detailed information on output file formats, see [Output Files Reference](./synthesizer-output-files.md)**
