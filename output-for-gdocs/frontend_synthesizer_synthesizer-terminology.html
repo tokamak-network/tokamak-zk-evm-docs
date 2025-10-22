@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synthesizer-terminology</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+    h2 { color: #34495e; margin-top: 30px; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; }
+    h3 { color: #7f8c8d; margin-top: 20px; }
+    code { font-family: 'Monaco', 'Courier New', monospace; font-size: 0.9em; }
+    pre { line-height: 1.4; }
+    a { color: #3498db; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { display: block; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px; }
+    ul { margin: 15px 0; padding-left: 30px; }
+    li { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>Synthesizer: Key Terminology</h1>
+
+<p>This document defines key terms and concepts specific to the Tokamak Synthesizer system.</p>
+
+<h2>Table of Contents</h2>
+
+<ul><li><a href="#auxiliary-input-auxin">Auxiliary Input (Auxin)</a></li>
+<li><a href="#block-info-blkinf">Block Info (BlkInf)</a></li>
+<li><a href="#buffer-placements">Buffer Placements</a></li>
+<li><a href="#circom">Circom</a></li>
+<li><a href="#data-aliasing">Data Aliasing</a></li>
+<li><a href="#datapt-data-point">DataPt (Data Point)</a></li>
+<li><a href="#environment-info-envinf">Environment Info (EnvInf)</a></li>
+<li><a href="#finalizer">Finalizer</a></li>
+<li><a href="#instance">Instance</a></li>
+<li><a href="#limb">Limb</a></li>
+<li><a href="#memorypt">MemoryPt</a></li>
+<li><a href="#permutation">Permutation</a></li>
+<li><a href="#placement">Placement</a></li>
+<li><a href="#prvin-and-prvout">PRV_IN and PRV_OUT</a></li>
+<li><a href="#pubin-and-pubout">PUB_IN and PUB_OUT</a></li>
+<li><a href="#qap-compiler">QAP Compiler</a></li>
+<li><a href="#r1cs">R1CS</a></li>
+<li><a href="#selector">Selector</a></li>
+<li><a href="#stackpt">StackPt</a></li>
+<li><a href="#subcircuit">Subcircuit</a></li>
+<li><a href="#symbol-processing">Symbol Processing</a></li>
+<li><a href="#synthesizer">Synthesizer</a></li>
+<li><a href="#wire">Wire</a></li>
+<li><a href="#wire-index">Wire Index</a></li>
+<li><a href="#witness">Witness</a></li>
+
+<p>---</p>
+
+<h2>Auxiliary Input (Auxin)</h2>
+
+<p>Hardcoded constants from the bytecode that are loaded directly as DataPts without going through buffer placements. Used primarily for PUSH operations where the value is embedded in the contract bytecode.</p>
+
+<p><strong>Example</strong>:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>PUSH1 0x20  // Loads 0x20 as auxiliary input
+</code></pre>
+
+<p><strong>Related</strong>: <a href="#datapt-data-point">DataPt</a></p>
+
+<p>---</p>
+
+<h2>Buffer Placements</h2>
+
+<p>Four special placements (IDs 0-3) that serve as interfaces between the external world and the circuit's internal symbol system. All external data must enter through input buffers and all outputs must exit through output buffers.</p>
+
+<p><strong>The four buffers</strong>:</p>
+
+<p><li><strong>0</strong>: PUB_IN (Public Input Buffer)</li><br><li><strong>1</strong>: PUB_OUT (Public Output Buffer)</li><br><li><strong>2</strong>: PRV_IN (Private Input Buffer)</li><br><li><strong>3</strong>: PRV_OUT (Private Output Buffer)</li></p>
+
+<p><strong>Related</strong>: <a href="#pubin-and-pubout">PUB_IN and PUB_OUT</a>, <a href="#prvin-and-prvout">PRV_IN and PRV_OUT</a></p>
+
+<p>---</p>
+
+<h2>Data Aliasing</h2>
+
+<p>The problem of overlapping memory regions where multiple writes affect the same memory location. MemoryPt tracks all overlapping writes and generates circuits to correctly reconstruct memory values by combining multiple DataPts with appropriate shifts and masks.</p>
+
+<p><strong>Example</strong>:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>MSTORE(0x00, valueA)  // Writes to 0x00-0x20
+MSTORE(0x10, valueB)  // Overlaps at 0x10-0x20
+MLOAD(0x00)           // Must reconstruct: valueA[0x00-0x10] | valueB[0x10-0x20]
+</code></pre>
+
+<p><strong>Related</strong>: <a href="#memorypt">MemoryPt</a></p>
+
+<p>---</p>
+
+<h2>DataPt (Data Point)</h2>
+
+<p>A symbolic representation of data in the circuit. Each DataPt contains:</p>
+
+<p><li><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">value</code>: The actual numeric value (for consistency checking)</li><br><li><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">source</code>: Placement ID where this data originated</li><br><li><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">wireIndex</code>: Unique identifier within the source placement</li><br><li><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">sourceSize</code>: Size of the data in bytes</li></p>
+
+<p>DataPts enable traceability of all data transformations throughout the circuit.</p>
+
+<p><strong>Example</strong>:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>{
+  value: 0x20n,
+  source: 5,        // From placement 5
+  wireIndex: 2,     // Third wire in that placement
+  sourceSize: 32
+}
+</code></pre>
+
+<p><strong>Related</strong>: <a href="#wire">Wire</a>, <a href="#symbol-processing">Symbol Processing</a></p>
+
+<p>---</p>
+
+<h2>Environment Info (EnvInf)</h2>
+
+<p>Transaction environment data that is loaded through the PUB_IN buffer. Includes values like:</p>
+
+<p><li><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">msg.sender</code> (ADDRESS)</li><br><li><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">msg.value</code> (CALLVALUE)</li><br><li><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tx.origin</code> (ORIGIN)</li><br><li>Calldata (CALLDATALOAD, CALLDATACOPY)</li></p>
+
+<p><strong>Related</strong>: <a href="#pubin-and-pubout">PUB_IN and PUB_OUT</a></p>
+
+<p>---</p>
+
+<h2>Finalizer</h2>
+
+<p>The component responsible for converting the Synthesizer's internal state (placements and DataPts) into the three output files required for proof generation. The Finalizer:</p>
+
+<p>1. Generates <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">permutation.json</code> by analyzing wire connections<br>2. Generates <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">instance.json</code> by extracting buffer values and creating witness arrays<br>3. Generates <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">placementVariables.json</code> by calculating witnesses for each placement using WASM</p>
+
+<p><strong>Related</strong>: <a href="./synthesizer-output-files.md">Output Files</a></p>
+
+<p>---</p>
+
+<h2>Instance</h2>
+
+<p>The public and private input/output values for the circuit, stored in <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">instance.json</code>. The instance contains:</p>
+
+<p><li>Buffer contents (publicInputBuffer, publicOutputBuffer, privateInputBuffer, privateOutputBuffer)</li><br><li>Flattened witness arrays (a_pub, a_prv)</li></p>
+
+<p>The instance is used by the Prover to generate the proof and by the Verifier to verify it.</p>
+
+<p><strong>Related</strong>: <a href="#witness">Witness</a>, <a href="./synthesizer-output-files.md#instancejson">instance.json</a></p>
+
+<p>---</p>
+
+<h2>Limb</h2>
+
+<p>A 128-bit portion of a 256-bit value. Since Circom uses a 254-bit finite field, 256-bit Ethereum values are split into two 128-bit limbs (lower and upper) to ensure all operations stay within the field size.</p>
+
+<p><strong>Example</strong>:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>256-bit value: 0x123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0
+Lower limb:    0x123456789ABCDEF0123456789ABCDEF0
+Upper limb:    0x123456789ABCDEF0123456789ABCDEF0
+</code></pre>
+
+<p><strong>Related</strong>: <a href="#circom">Circom</a></p>
+
+<p>---</p>
+
+<h2>MemoryPt</h2>
+
+<p>The symbolic equivalent of EVM memory that tracks all memory writes with timestamps. MemoryPt solves the data aliasing problem by maintaining a complete history of memory operations, allowing reconstruction of memory state at any point through circuit operations.</p>
+
+<p><strong>Key features</strong>:</p>
+
+<p><li>Timestamp-based tracking of all writes</li><br><li>Data aliasing resolution for overlapping memory regions</li><br><li>Lazy circuit generation (circuits created on MLOAD, not MSTORE)</li></p>
+
+<p><strong>Related</strong>: <a href="#data-aliasing">Data Aliasing</a></p>
+
+<p>---</p>
+
+<h2>Permutation</h2>
+
+<p>A mechanism to enforce wire equality constraints across placements. Wires that carry the same value are grouped into N-entry cycles in <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">permutation.json</code>. This is based on the PLONK permutation argument and ensures that connected wires have identical values.</p>
+
+<p><strong>Example</strong> (3-entry cycle):</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>[
+  {&quot;row&quot;: 13, &quot;col&quot;: 1, &quot;X&quot;: 14, &quot;Y&quot;: 3},
+  {&quot;row&quot;: 14, &quot;col&quot;: 3, &quot;X&quot;: 15, &quot;Y&quot;: 2},
+  {&quot;row&quot;: 15, &quot;col&quot;: 2, &quot;X&quot;: 13, &quot;Y&quot;: 1}
+]
+</code></pre>
+
+<p><strong>Interpretation</strong>: Wire 13 in Placement 1 → Wire 14 in Placement 3 → Wire 15 in Placement 2 → back to Wire 13 in Placement 1 (cycle complete).</p>
+
+<p><strong>Related</strong>: <a href="#wire">Wire</a>, <a href="./synthesizer-output-files.md">Output Files</a></p>
+
+<p>---</p>
+
+<h2>Placement</h2>
+
+<p>A specific instance of a subcircuit with concrete input and output DataPts. Each placement represents one operation in the circuit and is assigned a unique sequential ID starting from 4 (IDs 0-3 are reserved for buffer placements). Placements form a directed acyclic graph (DAG) that represents the complete computation.</p>
+
+<p><strong>Example</strong>:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>{
+  id: 5,
+  name: &#039;ALU1&#039;,
+  subcircuitId: 4,
+  usage: &#039;ADD&#039;,
+  selector: 0x02,
+  inPts: [selectorPt, input1Pt, input2Pt],
+  outPts: [resultPt]
+}
+</code></pre>
+
+<p><strong>Related</strong>: <a href="#subcircuit">Subcircuit</a>, <a href="#datapt-data-point">DataPt</a></p>
+
+<p>---</p>
+
+<h2>PRV_IN and PRV_OUT</h2>
+
+<p><strong>PRV_IN (Placement 2)</strong>: Converts external private values into circuit symbols. Used for sensitive inputs like storage values and account state that should remain hidden.</p>
+
+<p><strong>PRV_OUT (Placement 3)</strong>: Converts circuit symbols back to external private values. Used for private outputs like storage updates and internal state changes.</p>
+
+<p><strong>Usage</strong>: Only the Prover has access to these values; they are never revealed to the Verifier.</p>
+
+<p><strong>Related</strong>: <a href="#buffer-placements">Buffer Placements</a></p>
+
+<p>---</p>
+
+<h2>PUB_IN and PUB_OUT</h2>
+
+<p><strong>PUB_IN (Placement 0)</strong>: Converts external public values into circuit symbols. Used for publicly known inputs like calldata, block.number, msg.sender, and Keccak hash outputs.</p>
+
+<p><strong>PUB_OUT (Placement 1)</strong>: Converts circuit symbols back to external public values. Used for publicly revealed outputs like return data, event logs, and Keccak hash inputs.</p>
+
+<p><strong>Usage</strong>: Both Prover and Verifier have access to these values.</p>
+
+<p><strong>Related</strong>: <a href="#buffer-placements">Buffer Placements</a></p>
+
+<p>---</p>
+
+<h2>QAP Compiler</h2>
+
+<p>The component that compiles Circom subcircuits into Quadratic Arithmetic Programs (QAPs) and provides pre-defined circuits to the Synthesizer. The QAP Compiler produces:</p>
+
+<p><li>WASM modules for witness calculation</li><br><li>Constraint information for each subcircuit</li><br><li>Setup parameters for the proof system</li><br><li>Pre-compiled subcircuit library (ALU1, ALU2, ALU3, etc.) ready for use by the Synthesizer</li></p>
+
+<p><strong>Repository</strong>: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler">packages/frontend/qap-compiler</a></p>
+
+<p><strong>Related</strong>: <a href="#circom">Circom</a>, <a href="#subcircuit">Subcircuit</a></p>
+
+<p>---</p>
+
+<h2>R1CS</h2>
+
+<p>Rank-1 Constraint System - the mathematical representation of a circuit as a set of constraints of the form <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">(A · witness) * (B · witness) = (C · witness)</code>. Every Circom circuit is compiled into R1CS format, which is then used by the proof system.</p>
+
+<p><strong>Key concept</strong>: Wire 0 is always constant 1 in R1CS to enable expressing constant terms in constraints.</p>
+
+<p><strong>Related</strong>: <a href="#circom">Circom</a>, <a href="#witness">Witness</a></p>
+
+<p>---</p>
+
+<h2>Selector</h2>
+
+<p>A value used to choose which operation within a multi-operation subcircuit should be executed. Selectors are typically powers of 2 (e.g., <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 1n</code> for ADD, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 2n</code> for MUL) to enable efficient bitwise selection in the circuit.</p>
+
+<p><strong>Example</strong> (ALU1 selectors):</p>
+
+<p><li>ADD: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x02</code> (<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 1</code>)</li><br><li>MUL: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x04</code> (<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 2</code>)</li><br><li>SUB: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x08</code> (<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 3</code>)</li><br><li>EQ: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x100000</code> (<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 20</code>)</li><br><li>ISZERO: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x200000</code> (<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 21</code>)</li></p>
+
+<p><strong>Related</strong>: <a href="#subcircuit">Subcircuit</a>, <a href="./synthesizer-opcodes.md#appendix-subcircuit-mapping-table">Subcircuit Mapping Table</a></p>
+
+<p>---</p>
+
+<h2>StackPt</h2>
+
+<p>The symbolic equivalent of the EVM stack. Instead of storing concrete values, StackPt stores DataPts that represent symbolic references to circuit wires. Every stack operation (push, pop, dup, swap) operates on DataPts while the parallel EVM stack operates on values.</p>
+
+<p><strong>Consistency check</strong>: After each opcode, the Synthesizer verifies that <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">stack.values == stackPt.values</code> to ensure correctness.</p>
+
+<p><strong>Related</strong>: <a href="#datapt-data-point">DataPt</a>, <a href="#symbol-processing">Symbol Processing</a></p>
+
+<p>---</p>
+
+<h2>Subcircuit</h2>
+
+<p>A reusable circuit template defined in Circom that implements a specific operation or set of operations. Subcircuits are compiled into WASM for witness generation.</p>
+
+<p><strong>Related</strong>: <a href="#placement">Placement</a>, <a href="#circom">Circom</a></p>
+
+<p>---</p>
+
+<h2>Symbol Processing</h2>
+
+<p>The fundamental approach of the Synthesizer where all data is treated as symbolic references (DataPts) rather than concrete values. This allows tracking the complete provenance and transformation of every piece of data through the circuit, enabling zero-knowledge proof generation.</p>
+
+<p><strong>Contrast with EVM</strong>:</p>
+
+<p><li><strong>EVM</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">result = a + b</code> (values only)</li><br><li><strong>Synthesizer</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">resultPt = placement(ADD, [aPt, bPt])</code> (symbols with provenance)</li></p>
+
+<p><strong>Related</strong>: <a href="#datapt-data-point">DataPt</a></p>
+
+<p>---</p>
+
+<h2>Synthesizer</h2>
+
+<p>The core component that converts Ethereum transaction execution into zk-SNARK circuit representations. The Synthesizer runs in parallel with the standard EVM execution, tracking all operations as symbolic relationships rather than concrete values. It generates three output files: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">permutation.json</code>, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">instance.json</code>, and <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">placementVariables.json</code>.</p>
+
+<p><strong>Repository</strong>: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/synthesizer">packages/frontend/synthesizer</a></p>
+
+<p><strong>Related</strong>: <a href="./synthesizer-concepts.md">Synthesizer Concepts</a>, <a href="./synthesizer-execution-flow.md">Execution Flow</a>, <a href="https://tokamak.notion.site/Synthesizer-documentation-164d96a400a3808db0f0f636e20fca24">Official Documentation</a></p>
+
+<p>---</p>
+
+<h2>Wire</h2>
+
+<p>A connection point in a circuit that carries a value. Each wire in a placement is identified by its wire index. Wires connect placements together, forming the circuit graph. The <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">permutation.json</code> file describes how wires are connected across placements.</p>
+
+<p><strong>Related</strong>: <a href="#wire-index">Wire Index</a>, <a href="#permutation">Permutation</a></p>
+
+<p>---</p>
+
+<h2>Wire Index</h2>
+
+<p>A unique identifier for a wire within a specific placement. Wire indices start from 0 (constant 1 in Circom convention) and increment for each input, output, and internal signal in the subcircuit.</p>
+
+<p><strong>Standard ordering</strong> (Circom convention):</p>
+
+<p>1. Wire 0: Constant 1<br>2. Wires 1-N: Output signals<br>3. Wires N+1-M: Input signals<br>4. Wires M+1+: Internal signals</p>
+
+<p><strong>Related</strong>: <a href="#wire">Wire</a>, <a href="#datapt-data-point">DataPt</a></p>
+
+<p>---</p>
+
+<h2>Witness</h2>
+
+<p>The complete set of values for all wires in a circuit that satisfies all constraints. The witness includes inputs, outputs, and all intermediate computation values. For each placement, the witness is calculated using the subcircuit's WASM module.</p>
+
+<p><strong>Components</strong>:</p>
+
+<p><li><strong>Public witness</strong> (<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a_pub</code>): Values from PUB_IN and PUB_OUT buffers</li><br><li><strong>Private witness</strong> (<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a_prv</code>): Values from PRV_IN and PRV_OUT buffers</li><br><li><strong>Placement witness</strong>: All wire values for each subcircuit instance</li></ul></p>
+
+<p><strong>Related</strong>: <a href="#instance">Instance</a>, <a href="./synthesizer-output-files.md#placementvariablesjson">placementVariables.json</a><br></p>
+  
+  <hr style="margin-top: 60px; border: none; border-top: 1px solid #ddd;">
+  <p style="color: #7f8c8d; font-size: 0.9em;">
+    <em>이 문서는 <a href="https://YOUR-USERNAME.github.io/tokamak-zk-evm-docs">Tokamak zk-EVM Documentation</a>에서 변환되었습니다.</em>
+  </p>
+</body>
+</html>

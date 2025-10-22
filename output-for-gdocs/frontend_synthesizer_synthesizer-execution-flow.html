@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synthesizer-execution-flow</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+    h2 { color: #34495e; margin-top: 30px; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; }
+    h3 { color: #7f8c8d; margin-top: 20px; }
+    code { font-family: 'Monaco', 'Courier New', monospace; font-size: 0.9em; }
+    pre { line-height: 1.4; }
+    a { color: #3498db; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { display: block; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px; }
+    ul { margin: 15px 0; padding-left: 30px; }
+    li { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>Synthesizer: Execution Flow</h1>
+
+<p>This document walks through how Synthesizer processes Ethereum transactions, showing the complete execution flow from input to output with practical examples.</p>
+
+<h2>Transaction Lifecycle Overview</h2>
+
+<p>The following diagram shows the complete flow of a transaction through Synthesizer:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>┌──────────────────────────────────────────────────────────────────────────────┐
+│                         SYNTHESIZER TRANSACTION FLOW                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+<p>    INPUT                       PROCESSING                      OUTPUT</p>
+
+<p>┌─────────────┐            ┌─────────────────┐           ┌──────────────┐<br>│             │            │                 │           │              │<br>│  Ethereum   │            │  Initialization │           │              │<br>│ Transaction │            │                 │           │              │<br>│   (0x...)   │            │                 │           │              │<br>│             │            │                 │           │              │<br>│─────────────│            │                 │           │              │<br>│             │            │                 │           │              │<br>│  Subcircuit │            │                 │           │              │<br>│   Library   │──────────► └────────┬────────┘           │              │<br>│             │                     │                    │  permutation │<br>│             │                     ▼                    │     .json    │<br>│─────────────│            ┌─────────────────┐           │              │<br>│             │            │                 │           │   instance   │<br>│   RPC Data  │            │  EVM + Symbol   │           │     .json    │<br>│             │            │    Execution    │           │              │<br>│ (On-demand) │            │                 │           │   placement  │<br>│             │            │                 │           │   Variables  │<br>└─────────────┘            │                 │           │      .json   │<br>                           │                 │           │              │<br>                           │                 │           │              │<br>                           │                 │           │              │<br>                           │                 │           │              │<br>                           │                 │           │              │<br>                           └────────┬────────┘           │              │<br>                                    │                    │              │<br>                                    ▼                    │              │<br>                           ┌─────────────────┐           │              │<br>                           │                 │           │              │<br>                           │  Finalization   │  ───────► │              │<br>                           │                 │           │              │<br>                           └─────────────────┘           └──────────────┘<br></code></pre></p>
+
+<p><strong>What flows through</strong>:</p>
+
+<ul><li><strong>Transaction Hash</strong> → Fetches transaction details and triggers re-execution</li>
+<li><strong>Subcircuit Library</strong> → Provides circuit templates (.wasm, .ts) used during execution</li>
+<li><strong>RPC Provider</strong> → Supplies blockchain state (storage, balances, code) on-demand throughout execution</li>
+
+<p>The transaction flows through <strong>6 main steps</strong>, which we'll explore in detail below.</p>
+
+<p>---</p>
+
+<h2>Step-by-Step Transaction Processing</h2>
+
+<h3>Step 1: Setup & Preparation</h3>
+
+<p>Before processing the transaction, Synthesizer prepares its environment:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>┌────────────────────────────────────────────────────────┐
+│  1. Compile Subcircuit Library (One-time setup)        │
+└────────────────────────────────────────────────────────┘
+         │
+         │
+         │
+         │
+         ▼
+    Generate .wasm files (subcircuit0.wasm ... subcircuitN.wasm)
+    Generate TypeScript definitions (globalWireList.ts, subcircuitInfo.ts)
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  2. Configure RPC Provider                             │
+└────────────────────────────────────────────────────────┘
+         │
+         │  Set up RPC endpoint for Ethereum Mainnet
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  3. Provide Transaction Hash                           │
+└────────────────────────────────────────────────────────┘
+         │
+         │  TX: 0x123abc...
+         │
+         ▼
+    Ready to process transaction
+</code></pre>
+
+<p><strong>What happens here:</strong></p>
+
+<p>1. <strong>Subcircuit Library Compilation</strong>: Circom compiles all the fundamental circuits (ALU1, bitify, XOR, etc.) into WebAssembly files. These are the building blocks that Synthesizer will use to construct the transaction-specific circuit.</p>
+
+<p>2. <strong>RPC Connection</strong>: Synthesizer connects to Ethereum Mainnet via RPC to access blockchain state. This connection is essential because Synthesizer needs to:</p>
+
+<p>   - Fetch transaction details (from, to, data, value)<br>   - Access account states at the transaction's block height<br>   - Query storage values on-demand during execution<br>   - Retrieve block information (number, timestamp, coinbase, etc.)</p>
+
+<p>3. <strong>Transaction Selection</strong>: You provide the transaction hash of an already-executed Ethereum transaction. Synthesizer will re-execute this transaction to generate the circuit.</p>
+
+<p><strong>Important</strong>: The RPC connection remains active throughout execution, not just during initialization. When the EVM encounters <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">SLOAD</code>, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">BALANCE</code>, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">EXTCODESIZE</code>, etc., it queries the blockchain state through RPC in real-time.</p>
+
+<p>---</p>
+
+<h3>Step 2: Initialization</h3>
+
+<p>When you invoke Synthesizer, it creates the execution environment:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>┌────────────────────────────────────────────────────────┐
+│  createEVM() is called                                 │
+└────────────────────────────────────────────────────────┘
+         │
+         │  Fetch transaction data from RPC
+         │  Fetch block data from RPC
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  EVM instance created                                  │
+│  - Synthesizer instance attached                       │
+│  - Opcode handlers registered                          │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Synthesizer creates internal managers:                │
+│  - StateManager (holds Placements map)                 │
+│  - OperationHandler (arithmetic ops)                   │
+│  - DataLoader (external data)                          │
+│  - MemoryManager (memory aliasing)                     │
+│  - BufferManager (LOAD/RETURN buffers)                 │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Interpreter created with:                             │
+│  - Stack (EVM values)                                  │
+│  - StackPt (Synthesizer symbols)                       │
+│  - Memory (EVM bytes)                                  │
+│  - MemoryPt (Synthesizer symbols with time tracking)   │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+    Ready to execute bytecode
+</code></pre>
+
+<p><strong>What happens here:</strong></p>
+
+<p>The EVM is instantiated with an attached <a href="synthesizer-terminology.md#synthesizer">Synthesizer</a>. Think of it as running two virtual machines in parallel:</p>
+
+<p><li><strong>Standard EVM</strong>: Processes the transaction normally, updating stack/memory/storage</li><br><li><strong>Synthesizer</strong>: Shadows the EVM execution, tracking everything as mathematical <a href="synthesizer-terminology.md#symbol-processing">symbols</a></li></p>
+
+<p>At this point:</p>
+
+<p><li>The <a href="synthesizer-terminology.md#placement">Placements</a> map is empty (will be populated during execution)</li><br><li><a href="synthesizer-terminology.md#buffer-placements">Buffer placements</a> (IDs 0-3) are pre-initialized for LOAD and RETURN operations</li><br><li>Both <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Stack</code> and <a href="synthesizer-terminology.md#stackpt">StackPt</a> are empty</li><br><li>Both <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Memory</code> and <a href="synthesizer-terminology.md#memorypt">MemoryPt</a> are empty</li></p>
+
+<p>---</p>
+
+<h3>Step 3: Bytecode Execution (Dual Processing)</h3>
+
+<p>Now the interpreter begins executing the transaction bytecode. For <strong>every single opcode</strong>, both the EVM and Synthesizer process it in parallel:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>┌────────────────────────────────────────────────────────────────────┐
+│            For each opcode in transaction bytecode:                │
+└────────────────────────────────────────────────────────────────────┘
+                                 │
+                 ┌───────────────┴───────────────┐
+                 │                               │
+                 ▼                               ▼
+    ┌─────────────────────────┐     ┌─────────────────────────┐
+    │   EVM Handler executes  │     │ Synthesizer Handler     │
+    │                         │     │      executes           │
+    │  • Pop from Stack       │     │  • Pop from StackPt     │
+    │  • Compute result       │     │  • Create placement     │
+    │  • Push to Stack        │     │    with output symbol   │
+    │  • Update Memory/Storage│     │  • Push to StackPt      │
+    │                         │     │                         │
+    └─────────────┬───────────┘     └───────────┬─────────────┘
+                  │                             │
+                  └──────────────┬──────────────┘
+                                 │
+                                 ▼
+                    ┌─────────────────────────┐
+                    │  Consistency Check      │
+                    │  Stack == StackPt ?     │
+                    │  If not → Error         │
+                    └────────────┬────────────┘
+                                 │
+                                 ▼
+                        Continue to next opcode
+</code></pre>
+
+<p><strong>What happens here:</strong></p>
+
+<p>This is the core of Synthesizer. For example, when processing <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ADD</code>:</p>
+
+<p><strong>EVM side:</strong></p>
+
+<p>1. Pops two values: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a = 10</code>, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">b = 5</code><br>2. Computes: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">result = 15</code><br>3. Pushes <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">15</code> to Stack</p>
+
+<p><strong>Synthesizer side:</strong></p>
+
+<p>1. Pops two symbols: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">x</code>, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">y</code> (where <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">x.value = 10</code>, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">y.value = 5</code>)<br>2. Creates a new <a href="synthesizer-terminology.md#placement">placement</a>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ADD_placement = ALU1(x, y)</code><br>3. Creates output symbol: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">z</code> (where <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">z.value = 15</code>, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">z.source = ADD_placement</code>)<br>4. Pushes <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">z</code> to <a href="synthesizer-terminology.md#stackpt">StackPt</a><br>5. Records: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Placements[4] = { name: "ALU1", usage: "ADD", subcircuitId: 4, inPts: [x, y], outPts: [z] }</code></p>
+
+<p>After every opcode, Synthesizer verifies that <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Stack[i].value == StackPt[i].value</code> for all elements. This ensures the symbolic execution matches the actual execution.</p>
+
+<p><strong>Key insight</strong>: Synthesizer is not simulating the EVM—it's <strong>shadowing</strong> it. The EVM computes the actual values, while Synthesizer builds a mathematical proof of how those values were derived.</p>
+
+<p>---</p>
+
+<h3>Step 4: Symbol Loading & Returning</h3>
+
+<p>Throughout execution, Synthesizer needs to convert between external values and internal symbols:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>┌────────────────────────────────────────────────────────┐
+│  Loading External Data (LOAD Buffer)                   │
+└────────────────────────────────────────────────────────┘
+         │
+         │  Examples: CALLDATALOAD, SLOAD, BLOCKHASH
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  External value → Symbol conversion                    │
+│                                                        │
+│  calldata[0] = 0x05  →  x (symbol)                    │
+│  storage[key] = 0x0a  →  y (symbol)                   │
+│  block.number = 19000  →  z (symbol)                  │
+└────────────────────────────────────────────────────────┘
+         │
+         │  Symbols flow through circuit
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Symbol undergoes transformations                      │
+│                                                        │
+│  x&#039; = ADD(x, y)                                       │
+│  x&#039;&#039; = MUL(x&#039;, constant)                              │
+│  x&#039;&#039;&#039; = AND(x&#039;&#039;, mask)                                │
+└────────────────────────────────────────────────────────┘
+         │
+         │  Examples: SSTORE, LOG
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Returning to External World (RETURN Buffer)           │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Symbol → External value conversion                    │
+│                                                        │
+│  x&#039;&#039;&#039; (symbol)  →  storage[key] = 0x14                │
+│  y&#039;&#039; (symbol)   →  log.data = 0x...                   │
+└────────────────────────────────────────────────────────┘
+</code></pre>
+
+<p><strong>What happens here:</strong></p>
+
+<p>Buffers act as the <strong>interface</strong> between the external world (Ethereum state) and the internal circuit world (symbols):</p>
+
+<p><li><strong>LOAD Buffer</strong> (<a href="synthesizer-terminology.md#placement">Placement</a> IDs 0, 2): Takes concrete values and produces symbols</li></p>
+
+<p>  - Public inputs: calldata, block info, msg.sender (<a href="synthesizer-terminology.md#pub-in-and-pub-out">PUB_IN</a> - Placement 0)<br>  - Private inputs: storage values, account states (<a href="synthesizer-terminology.md#prv-in-and-prv-out">PRV_IN</a> - Placement 2)</p>
+
+<p><li><strong>RETURN Buffer</strong> (Placement IDs 1, 3): Takes symbols and produces concrete outputs</li></ul><br>  - Public outputs: logs, return data (<a href="synthesizer-terminology.md#pub-in-and-pub-out">PUB_OUT</a> - Placement 1)<br>  - Private outputs: storage updates (<a href="synthesizer-terminology.md#prv-in-and-prv-out">PRV_OUT</a> - Placement 3)</p>
+
+<p>This is crucial for zero-knowledge proofs: public inputs/outputs are revealed, while private inputs/outputs remain hidden.</p>
+
+<p>---</p>
+
+<h3>Step 5: Memory Aliasing Resolution</h3>
+
+<p>One of Synthesizer's most complex tasks is tracking overlapping memory writes:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>┌────────────────────────────────────────────────────────┐
+│  Time 0: MSTORE at offset 0x00                         │
+│          Store symbol x (32 bytes)                     │
+└────────────────────────────────────────────────────────┘
+         │
+         │  MemoryPt[0x00-0x20] = { time: 0, symbol: x }
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Time 1: MSTORE at offset 0x10                         │
+│          Store symbol y (32 bytes)                     │
+└────────────────────────────────────────────────────────┘
+         │
+         │  MemoryPt[0x10-0x30] = { time: 1, symbol: y }
+         │  (Overlaps with x at 0x10-0x20!)
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Time 2: MLOAD at offset 0x00-0x20                     │
+│          Need to reconstruct the value!                │
+└────────────────────────────────────────────────────────┘
+         │
+         │  Memory region 0x00-0x20 now contains:
+         │  - Bytes 0x00-0x0F: from x (unchanged)
+         │  - Bytes 0x10-0x1F: from y (overwrote x)
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Synthesizer creates reconstruction circuit:           │
+│                                                        │
+│  1. Extract first 16 bytes of x                        │
+│     x_low = SHR(x, 128) &amp; 0xFFFF...                   │
+│                                                        │
+│  2. Extract first 16 bytes of y                        │
+│     y_low = SHR(y, 128) &amp; 0xFFFF...                   │
+│                                                        │
+│  3. Combine them                                       │
+│     result = SHL(x_low, 128) | y_low                  │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  New placement added for reconstruction                │
+│  StackPt.push(result symbol)                           │
+└────────────────────────────────────────────────────────┘
+</code></pre>
+
+<p><strong>What happens here:</strong></p>
+
+<p>Traditional EVM simply overwrites memory and returns the latest value. But Synthesizer must prove <strong>how</strong> that value was computed from the original symbols.</p>
+
+<p>The 2D structure of <a href="synthesizer-terminology.md#memorypt">MemoryPt</a> (offset × time) allows Synthesizer to:</p>
+
+<p>1. Track all writes to each memory location<br>2. Detect overlaps when reading<br>3. Generate <a href="synthesizer-terminology.md#subcircuit">subcircuits</a> (using SHR, SHL, AND, OR) to reconstruct the correct value<br>4. Prove the reconstruction is correct</p>
+
+<p>This is why memory operations can generate multiple <a href="synthesizer-terminology.md#placement">placements</a>—they need to prove <a href="synthesizer-terminology.md#data-aliasing">data aliasing</a>.</p>
+
+<p>---</p>
+
+<h3>Step 6: Finalization & Output Generation</h3>
+
+<p>After bytecode execution completes, Synthesizer generates the final output files:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>┌────────────────────────────────────────────────────────┐
+│  Bytecode execution finished                           │
+│  - All opcodes processed                               │
+│  - Placements map populated                            │
+│  - Symbol graph complete                               │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Finalizer analyzes Placements                         │
+│                                                        │
+│  For each placement:                                   │
+│  - Extract input wire indices                          │
+│  - Extract output wire indices                         │
+│  - Track wire connections between placements           │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Generate permutation.json                             │
+│                                                        │
+│  Wire connection map:                                  │
+│  [                                                     │
+│    { row: 13, col: 1, X: 14, Y: 3 },                  │
+│    { row: 27, col: 2, X: 8, Y: 5 },                   │
+│    ...                                                 │
+│  ]                                                     │
+│                                                        │
+│  Meaning: Wire 13 of Placement 1 connects to           │
+│           Wire 14 of Placement 3                       │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Generate instance.json                                │
+│                                                        │
+│  Public/Private witness values:                        │
+│  {                                                     │
+│    &quot;publicInputBuffer&quot;: [...],  // From PUB_IN         │
+│    &quot;publicOutputBuffer&quot;: [...], // From PUB_OUT        │
+│    &quot;privateInputBuffer&quot;: [...], // From PRV_IN         │
+│    &quot;privateOutputBuffer&quot;: [...],// From PRV_OUT        │
+│    &quot;a_pub&quot;: [...],  // Public witness array            │
+│    &quot;a_prv&quot;: [...]   // Private witness array           │
+│  }                                                     │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Generate placementVariables.json                      │
+│                                                        │
+│  Complete witness for each placement:                  │
+│  [                                                     │
+│    {                                                   │
+│      &quot;subcircuitId&quot;: 4,                                │
+│      &quot;variables&quot;: [&quot;0x01&quot;, &quot;0x04&quot;, ...]                │
+│    },                                                  │
+│    ...                                                 │
+│  ]                                                     │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Output files ready for backend prover                 │
+│  - permutation.json (circuit topology)                 │
+│  - instance.json (public/private I/O)                  │
+│  - placementVariables.json (complete witness)          │
+└────────────────────────────────────────────────────────┘
+</code></pre>
+
+<p><strong>What happens here:</strong></p>
+
+<p>The <a href="synthesizer-terminology.md#finalizer">Finalizer</a> converts the <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Placements</code> map into three critical files:</p>
+
+<p>1. <strong>permutation.json</strong>: Describes the circuit topology</p>
+
+<p>   - How subcircuit <a href="synthesizer-terminology.md#wire">wires</a> are connected<br>   - PLONK-style <a href="synthesizer-terminology.md#permutation">Permutation</a> Argument<br>   - Used by Prove, Verify stages</p>
+
+<p>2. <strong>instance.json</strong>: Contains the actual input/output values</p>
+
+<p>   - Public values are revealed (anyone can see)<br>   - Private values remain hidden (only prover knows)<br>   - Contains both buffer data and complete <a href="synthesizer-terminology.md#witness">witness</a> arrays</p>
+
+<p>3. <strong>placementVariables.json</strong>: Full <a href="synthesizer-terminology.md#witness">witness</a> for proof generation<br>   - All intermediate values for each <a href="synthesizer-terminology.md#subcircuit">subcircuit</a><br>   - Needed by the prover to satisfy constraints<br>   - Maps to <a href="synthesizer-terminology.md#r1cs">R1CS</a> format used by Tokamak zk-SNARK</p>
+
+<p>These files are then passed to the backend Rust prover, which generates the actual zero-knowledge proof.<br></p>
+  
+  <hr style="margin-top: 60px; border: none; border-top: 1px solid #ddd;">
+  <p style="color: #7f8c8d; font-size: 0.9em;">
+    <em>이 문서는 <a href="https://YOUR-USERNAME.github.io/tokamak-zk-evm-docs">Tokamak zk-EVM Documentation</a>에서 변환되었습니다.</em>
+  </p>
+</body>
+</html>

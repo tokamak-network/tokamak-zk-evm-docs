@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synthesizer-opcodes</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+    h2 { color: #34495e; margin-top: 30px; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; }
+    h3 { color: #7f8c8d; margin-top: 20px; }
+    code { font-family: 'Monaco', 'Courier New', monospace; font-size: 0.9em; }
+    pre { line-height: 1.4; }
+    a { color: #3498db; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { display: block; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px; }
+    ul { margin: 15px 0; padding-left: 30px; }
+    li { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>Synthesizer: Opcode Reference</h1>
+
+<p>This document describes how the Tokamak <a href="synthesizer-terminology.md#synthesizer">Synthesizer</a> handles each EVM opcode, comparing standard EVM behavior with circuit generation.</p>
+
+<p>---</p>
+
+<h2>On This Page</h2>
+
+<ul><li><a href="#overview">Overview</a></li>
+<li><a href="#all-opcodes">All Opcodes</a></li>
+<li><a href="#0x01-add">Detailed Opcode Reference</a></li>
+<li><a href="#circuit-complexity-summary">Circuit Complexity Summary</a></li>
+<li><a href="#related-resources">Related Resources</a></li>
+<li><a href="#appendix-subcircuit-mapping-table">Appendix: Subcircuit Mapping Table</a></li>
+
+<p>---</p>
+
+<h2>Overview</h2>
+
+<h3>Standard EVM vs Synthesizer</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// Standard EVM (Value Processing)
+0x01 ADD: pop(a, b) → push(a + b)  // Black box
+
+<p>// Synthesizer (Symbol Processing + Circuit Generation)<br>0x01 ADD: pop(a, b) → place(ALU1, [selector, a, b], [result]) → push(result)  // Transparent<br></code></pre></p>
+
+<h3>Key Differences</h3>
+
+<p>| Aspect           | Standard EVM               | Synthesizer                               |<br>| ---------------- | -------------------------- | ----------------------------------------- |<br>| <strong>Processing</strong>   | Value-based computation    | Symbol-based circuit generation           |<br>| <strong>Traceability</strong> | Black box (input → output) | Transparent (input → placements → output) |<br>| <strong>Output</strong>       | Final computation result   | Circuit representation + result           |<br>| <strong>Purpose</strong>      | Execute transaction        | Generate zk-SNARK proof                   |</p>
+
+<h3>Subcircuit Types</h3>
+
+<p>The Synthesizer uses pre-compiled <a href="synthesizer-terminology.md#subcircuit">subcircuits</a> from the <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler">QAP Compiler</a>:</p>
+
+<p><li><strong>ALU1</strong>: Basic arithmetic (ADD, MUL, SUB, EQ, ISZERO, NOT)</li><br><li><strong>ALU2</strong>: Modular arithmetic (DIV, SDIV, MOD, SMOD, ADDMOD, MULMOD)</li><br><li><strong>ALU3</strong>: Shift operations (SHL, SHR, SAR)</li><br><li><strong>ALU4</strong>: Comparisons (LT, GT, SLT, SGT)</li><br><li><strong>ALU5</strong>: Specialized operations (SIGNEXTEND, BYTE)</li><br><li><strong>AND/OR/XOR</strong>: Bitwise operations</li><br><li><strong>DecToBit</strong>: Decimal to bit decomposition</li><br><li><strong>Accumulator</strong>: Multi-input accumulation</li></p>
+
+<p>---</p>
+
+<h2>All Opcodes</h2>
+
+<p>| Opcode      | Name         | Stack In             | Stack Out               | Subcircuit    | Details                                   |<br>| ----------- | ------------ | -------------------- | ----------------------- | ------------- | ----------------------------------------- |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x01</code>      | ADD          | a, b                 | a + b                   | ALU1          | <a href="#0x01-add">View Details →</a>               |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x02</code>      | MUL          | a, b                 | a × b                   | ALU1          | <a href="#0x02-mul">View Details →</a>               |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x03</code>      | SUB          | a, b                 | a - b                   | ALU1          | <a href="#0x03-sub">View Details →</a>               |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x04</code>      | DIV          | a, b                 | a / b                   | ALU2          | <a href="#0x04-div">View Details →</a>               |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x0a</code>      | EXP          | base, exp            | base ^ exp              | ALU1+DecToBit | <a href="#0x0a-exp">View Details →</a>               |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x10</code>      | LT           | a, b                 | a < b                   | ALU4          | <a href="#0x10-lt">View Details →</a>                |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x11</code>      | GT           | a, b                 | a > b                   | ALU4          | <a href="#0x11-gt">View Details →</a>                |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x12</code>      | SLT          | a, b                 | a < b (signed)          | ALU4          | <a href="#0x12-slt">View Details →</a>               |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x13</code>      | SGT          | a, b                 | a > b (signed)          | ALU4          | <a href="#0x13-sgt">View Details →</a>               |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x14</code>      | EQ           | a, b                 | a == b                  | ALU1          | <a href="#0x14-eq">View Details →</a>                |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x15</code>      | ISZERO       | a                    | a == 0                  | ALU1          | <a href="#0x15-iszero">View Details →</a>            |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x16</code>      | AND          | a, b                 | a & b                   | AND           | <a href="#0x16-and">View Details →</a>               |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x17</code>      | OR           | a, b                 | a &#124; b              | OR            | <a href="#0x17-or">View Details →</a>                |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x18</code>      | XOR          | a, b                 | a ^ b                   | XOR           | <a href="#0x18-xor">View Details →</a>               |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x19</code>      | NOT          | a                    | ~a                      | ALU1          | <a href="#0x19-not">View Details →</a>               |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x1a</code>      | BYTE         | i, x                 | x[i]                    | ALU5          | <a href="#0x1a-byte">View Details →</a>              |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x1b</code>      | SHL          | shift, value         | value << shift          | ALU3          | <a href="#0x1b-shl">View Details →</a>               |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x1c</code>      | SHR          | shift, value         | value >> shift          | ALU3          | <a href="#0x1c-shr">View Details →</a>               |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x1d</code>      | SAR          | shift, value         | value >> shift (signed) | ALU3          | <a href="#0x1d-sar">View Details →</a>               |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x20</code>      | KECCAK256    | offset, size         | hash                    | External      | <a href="#0x20-keccak256">View Details →</a>         |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x30</code>      | ADDRESS      | -                    | address(this)           | PUB_IN        | <a href="#0x30-address">View Details →</a>           |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x35</code>      | CALLDATALOAD | i                    | calldata[i]             | PUB_IN        | <a href="#0x35-calldataload">View Details →</a>      |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x37</code>      | CALLDATACOPY | memOff, dataOff, len | -                       | PUB_IN        | <a href="#0x37-calldatacopy">View Details →</a>      |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x50</code>      | POP          | value                | -                       | Stack         | <a href="#0x50-pop">View Details →</a>               |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x51</code>      | MLOAD        | offset               | memory[offset]          | Memory        | <a href="#0x51-mload">View Details →</a>             |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x52</code>      | MSTORE       | offset, value        | -                       | Memory        | <a href="#0x52-mstore">View Details →</a>            |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x54</code>      | SLOAD        | key                  | storage[key]            | PRV_IN        | <a href="#0x54-sload">View Details →</a>             |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x55</code>      | SSTORE       | key, value           | -                       | PRV_OUT       | <a href="#0x55-sstore">View Details →</a>            |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x60-0x7f</code> | PUSH1-32     | -                    | value                   | Constant      | <a href="#0x60-0x7f-push1-push32">View Details →</a> |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x80-0x8f</code> | DUP1-16      | ...                  | value, ...              | Stack         | <a href="#0x80-0x8f-dup1-dup16">View Details →</a>   |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x90-0x9f</code> | SWAP1-16     | a, ..., b            | b, ..., a               | Stack         | <a href="#0x90-0x9f-swap1-swap16">View Details →</a> |</p>
+
+<p>---</p>
+
+<p><a id="0x01-add"></a></p>
+
+<h3>0x01: ADD</h3>
+
+<p><strong>Constraints</strong>: 803 (entire ALU1 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a, b</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a + b mod 2^256</code></p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const [a, b] = stackPt.popN(2);
+const result = mod(a.value + b.value, TWO_POW256);
+synthesizerArith(&#039;ADD&#039;, [a.value, b.value], result, runState);
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong><a href="synthesizer-terminology.md#subcircuit">Subcircuit</a></strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU1</code> | <strong><a href="synthesizer-terminology.md#selector">Selector</a></strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 1n</code></li><br><li><strong>Constraints</strong>: 803 (entire ALU1 subcircuit, 630 non-linear + 173 linear)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L97-L103"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:97-103</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L18-L26"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:18-26</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L43-L50"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU1 (alu_safe.circom:43-50)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/arithmetic_unsafe_type1.circom#L10-L24"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Add256_unsafe (arithmetic_unsafe_type1.circom:10-24)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x02-mul"></a></p>
+
+<h3>0x02: MUL</h3>
+
+<p><strong>Constraints</strong>: 803 (entire ALU1 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a, b</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a <em> b mod 2^256</code></p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const [a, b] = stackPt.popN(2);
+const result = mod(a.value </em> b.value, TWO_POW256);
+synthesizerArith(&#039;MUL&#039;, [a.value, b.value], result, runState);
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU1</code> | <strong>Selector</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 2n</code></li><br><li><strong>Constraints</strong>: 803 (entire ALU1 subcircuit, shared with ADD/SUB/EQ/ISZERO/NOT)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L105-L111"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:105-111</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L28-L36"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:28-36</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L52-L59"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU1 (alu_safe.circom:52-59)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/arithmetic_unsafe_type1.circom#L37-L66"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Mul256_unsafe (arithmetic_unsafe_type1.circom:37-66)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x03-sub"></a></p>
+
+<h3>0x03: SUB</h3>
+
+<p><strong>Constraints</strong>: 803 (entire ALU1 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a, b</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a - b mod 2^256</code></p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const [a, b] = stackPt.popN(2);
+const result = mod(a.value - b.value, TWO_POW256);
+synthesizerArith(&#039;SUB&#039;, [a.value, b.value], result, runState);
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU1</code> | <strong>Selector</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 3n</code></li><br><li><strong>Constraints</strong>: 803 (entire ALU1 subcircuit, shared with ADD/MUL/EQ/ISZERO/NOT)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L113-L119"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:113-119</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L38-L46"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:38-46</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L61-L68"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU1 (alu_safe.circom:61-68)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/arithmetic_unsafe_type1.circom#L26-L35"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Sub256_unsafe (arithmetic_unsafe_type1.circom:26-35)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x04-div"></a></p>
+
+<h3>0x04: DIV</h3>
+
+<p><strong>Constraints</strong>: 993 (entire ALU2 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a, b</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a / b</code> (integer division, 0 if b == 0)</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const [a, b] = stackPt.popN(2);
+let result = b.value === BIGINT_0 ? BIGINT_0 : mod(a.value / b.value, TWO_POW256);
+synthesizerArith(&#039;DIV&#039;, [a.value, b.value], result, runState);
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU2</code> (handles division/modulo) | <strong>Selector</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 4n</code></li><br><li><strong>Constraints</strong>: 993 (entire ALU2 subcircuit, shared with SDIV/MOD/SMOD/ADDMOD/MULMOD)</li></p>
+
+<p><strong>Special Cases</strong>: Division by zero returns 0 (EVM convention)</p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L121-L131"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:121-131</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L48-L61"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:48-61</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L154-L162"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU2 (alu_safe.circom:154-162)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/arithmetic_unsafe_type2.circom#L16-L46"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Div256_unsafe (arithmetic_unsafe_type2.circom:16-46)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x0a-exp"></a></p>
+
+<h3>0x0a: EXP</h3>
+
+<p><strong>Stack Input</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">base</code>, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">exponent</code>  <br><strong>Stack Output</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">base ^ exponent mod 2^256</code></p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const [base, exponent] = stackPt.popN(2);
+let result;
+if (exponent.value === BIGINT_0) {
+  result = BIGINT_1;
+} else if (base.value === BIGINT_0) {
+  result = base.value;
+} else {
+  result = (base.value <strong> exponent.value) % TWO_POW256;
+}
+synthesizerArith(&#039;EXP&#039;, [base.value, exponent.value], result, runState);
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p>EXP uses a two-phase approach implemented in <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/operations/exp.ts#L12-L44"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">placeExp()</code></a>:</p>
+
+<p></strong>Phase 1: Binary Decomposition<strong></p>
+
+<p><li></strong>DecToBit<strong>: Converts exponent to binary representation</li><br><li>Line 28: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">synthesizer.placeArith('DecToBit', [bPt]).reverse()</code></li><br><li>Constraints: 258 (256 non-linear + 2 linear)</li></p>
+
+<p></strong>Phase 2: Square-and-Multiply Loop<strong></p>
+
+<p><li></strong>SubEXP<strong>: Repeated squaring and conditional multiplication</li><br><li>Lines 36-41: Loop through each bit of exponent</li><br><li>Each iteration: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">synthesizer.placeArith('SubEXP', _inPts)</code></li><br><li>SubEXP per iteration: 803 constraints (entire ALU1 <a href="synthesizer-terminology.md#subcircuit">subcircuit</a>)</li><br><li>Number of iterations: bit length of exponent (max 256)</li></p>
+
+<p></strong>Why Two Subcircuits?<strong></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// From exp.ts:26-41
+const k = Math.floor(Math.log2(bNum)) + 1; // Bit length
+
+<p>// Step 1: Convert exponent to bits<br>const bitifyOutPts = synthesizer.placeArith(&#039;DecToBit&#039;, [bPt]).reverse();</p>
+
+<p>// Step 2: Square-and-multiply using each bit<br>for (let i = 1; i &lt;= k; i++) {<br>  const _inPts = [chPts[i - 1], ahPts[i - 1], bitifyOutPts[i - 1]];<br>  const _outPts = synthesizer.placeArith(&#039;SubEXP&#039;, _inPts);<br>  chPts.push(_outPts[0]);  // Cumulative result<br>  ahPts.push(_outPts[1]);  // Current power<br>}<br></code></pre></p>
+
+<p></strong>Total Constraints*<em>: 258 (DecToBit) + 803 × k (SubEXP iterations), where k = bit length of exponent</p>
+
+<p>#### Example: Computing 3^13</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>13 = 0b1101 (binary, LSB first: [1, 0, 1, 1])
+
+<p>Step 1: DecToBit(13) → [1, 0, 1, 1] (258 constraints)</p>
+
+<p>Step 2: Square-and-Multiply Loop (4 iterations, 803 constraints each)<br>  Initial: ch[0] = 1, ah[0] = 3</p>
+
+<p>  i=1, bit[0]=1: SubEXP(ch=1, ah=3, bit=1)<br>    → ch[1] = 3 (1 </em> 3^1)<br>    → ah[1] = 9 (3^2)</p>
+
+<p>  i=2, bit[1]=0: SubEXP(ch=3, ah=9, bit=0)<br>    → ch[2] = 3 (3 <em> 1, bit=0 means no multiply)<br>    → ah[2] = 81 (9^2)</p>
+
+<p>  i=3, bit[2]=1: SubEXP(ch=3, ah=81, bit=1)<br>    → ch[3] = 243 (3 </em> 81^1)<br>    → ah[3] = 6561 (81^2)</p>
+
+<p>  i=4, bit[3]=1: SubEXP(ch=243, ah=6561, bit=1)<br>    → ch[4] = 1594323 (243 * 6561^1)<br>    → ah[4] = 43046721 (6561^2)</p>
+
+<p>Result: 3^13 = 1594323</p>
+
+<p>Total Constraints: 258 + (803 × 4) = 3,470 constraints<br></code></pre></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L177-L188"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:177-188</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L141-L156"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:141-156</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/operations/exp.ts#L12-L44"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">placeExp() (exp.ts:12-44)</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L70-L78"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU1 SubEXP (alu_safe.circom:70-78)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/DecToBit_circuit.circom"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">DecToBit_circuit.circom</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x10-lt"></a></p>
+
+<h3>0x10: LT</h3>
+
+<p><strong>Constraints</strong>: 629 (entire ALU4 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a, b</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a < b</code> (1 if true, 0 if false)</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const [a, b] = stackPt.popN(2);
+const result = a.value &lt; b.value ? BIGINT_1 : BIGINT_0;
+synthesizerArith(&#039;LT&#039;, [a.value, b.value], result, runState);
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU4</code> (comparison operations) | <strong>Selector</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 16n</code></li><br><li><strong>Constraints</strong>: 629 (entire ALU4 subcircuit, shared with GT/SLT/SGT)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L240-L246"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:240-246</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L167-L175"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:167-175</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L350-L354"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU4 (alu_safe.circom:350-354)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L6-L19"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">LessThan256 (compare_safe.circom:6-19)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x11-gt"></a></p>
+
+<h3>0x11: GT</h3>
+
+<p><strong>Constraints</strong>: 629 (entire ALU4 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a, b</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a > b</code> (1 if true, 0 if false)</p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU4</code> | <strong>Selector</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 17n</code></li><br><li><strong>Constraints</strong>: 629 (entire ALU4 subcircuit, shared with LT/SLT/SGT)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L248-L254"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:248-254</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L177-L185"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:177-185</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L356-L359"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU4 (alu_safe.circom:356-359)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L35-L39"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">GreaterThan256 (compare_safe.circom:35-39)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x12-slt"></a></p>
+
+<h3>0x12: SLT</h3>
+
+<p><strong>Constraints</strong>: 629 (entire ALU4 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a, b</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a < b</code> (signed comparison, 1 if true, 0 if false)</p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU4</code> | <strong>Selector</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 18n</code></li><br><li><strong>Constraints</strong>: 629 (entire ALU4 subcircuit, shared with LT/GT/SGT)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L256-L262"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:256-262</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L187-L195"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:187-195</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L361-L395"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU4 (alu_safe.circom:361-395)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L41-L74"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">SignedLessThan256 (compare_safe.circom:41-74)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x13-sgt"></a></p>
+
+<h3>0x13: SGT</h3>
+
+<p><strong>Constraints</strong>: 629 (entire ALU4 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a, b</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a > b</code> (signed comparison, 1 if true, 0 if false)</p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU4</code> | <strong>Selector</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 19n</code></li><br><li><strong>Constraints</strong>: 629 (entire ALU4 subcircuit, shared with LT/GT/SLT)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L264-L270"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:264-270</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L197-L205"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:197-205</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L397-L400"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU4 (alu_safe.circom:397-400)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L76-L80"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">SignedGreaterThan256 (compare_safe.circom:76-80)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x14-eq"></a></p>
+
+<h3>0x14: EQ</h3>
+
+<p><strong>Constraints</strong>: 803 (entire ALU1 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a, b</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a == b</code> (1 if true, 0 if false)</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const [a, b] = stackPt.popN(2);
+const result = a.value === b.value ? BIGINT_1 : BIGINT_0;
+await synthesizerArith(&#039;EQ&#039;, [a.value, b.value], result, runState);
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU1</code></li><br><li><strong>Selector</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 20n</code></li><br><li><strong>Inputs</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">[selector, a, b]</code></li><br><li><strong>Outputs</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">[result]</code> (0 or 1)</li><br><li><strong>Constraints</strong>: 803 (same ALU1 subcircuit)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L272-L278"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:272-278</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L207-L215"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:207-215</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L80-L87"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU1 (alu_safe.circom:80-87)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L92-L99"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">IsEqual256 (compare_safe.circom:92-99)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x15-iszero"></a></p>
+
+<h3>0x15: ISZERO</h3>
+
+<p><strong>Constraints</strong>: 803 (entire ALU1 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a == 0</code> (1 if true, 0 if false)</p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU1</code> | <strong>Selector</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 21n</code></li><br><li><strong>Constraints</strong>: 803 (entire ALU1 subcircuit, shared with ADD/MUL/SUB/EQ/NOT)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L280-L286"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:280-286</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L217-L225"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:217-225</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L89-L95"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU1 (alu_safe.circom:89-95)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L82-L90"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">IsZero256 (compare_safe.circom:82-90)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x16-and"></a></p>
+
+<h3>0x16: AND</h3>
+
+<p><strong>Constraints</strong>: 774</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a, b</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a & b</code> (bitwise AND)</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const [a, b] = stackPt.popN(2);
+const result = a.value &amp; b.value;
+await synthesizerArith(&#039;AND&#039;, [a.value, b.value], result, runState);
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">AND</code> (dedicated bitwise circuit)</li><br><li><strong>Constraints</strong>: 774 (768 non-linear + 6 linear)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L288-L294"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:288-294</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L227-L234"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:227-234</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L870-L880"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU_bitwise (alu_safe.circom:870-880)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/bitwise_safe.circom#L21-L26"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">And256 (bitwise_safe.circom:21-26)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x17-or"></a></p>
+
+<h3>0x17: OR</h3>
+
+<p><strong>Constraints</strong>: 774</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a, b</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a | b</code> (bitwise OR)</p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">OR</code> (dedicated bitwise circuit)</li><br><li><strong>Constraints</strong>: 774 (768 non-linear + 6 linear)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L296-L302"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:296-302</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L237-L244"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:237-244</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L882-L892"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU_bitwise (alu_safe.circom:882-892)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/bitwise_safe.circom#L14-L19"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Or256 (bitwise_safe.circom:14-19)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x18-xor"></a></p>
+
+<h3>0x18: XOR</h3>
+
+<p><strong>Constraints</strong>: 774</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a, b</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a ^ b</code> (bitwise XOR)</p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">XOR</code> (dedicated bitwise circuit)</li><br><li><strong>Constraints</strong>: 774 (768 non-linear + 6 linear)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L304-L310"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:304-310</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L247-L254"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:247-254</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L894-L904"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU_bitwise (alu_safe.circom:894-904)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/bitwise_safe.circom#L7-L12"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Xor256 (bitwise_safe.circom:7-12)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x19-not"></a></p>
+
+<h3>0x19: NOT</h3>
+
+<p><strong>Constraints</strong>: 803 (entire ALU1 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">~a</code> (bitwise NOT)</p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU1</code> | <strong>Selector</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 25n</code></li><br><li><strong>Constraints</strong>: 803 (entire ALU1 subcircuit, shared with ADD/MUL/SUB/EQ/ISZERO)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L312-L318"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:312-318</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L257-L265"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:257-265</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L98-L104"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU1 (alu_safe.circom:98-104)</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/arithmetic_unsafe_type1.circom#L95-L100"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Not256_unsafe (arithmetic_unsafe_type1.circom:95-100)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x1a-byte"></a></p>
+
+<h3>0x1a: BYTE</h3>
+
+<p><strong>Constraints</strong>: 819 (entire ALU5 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">i, x</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">x[i]</code> (i-th byte of x, 0-indexed from left)</p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU5</code> | <strong>Selector</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 26n</code></li><br><li><strong>Constraints</strong>: 819 (entire ALU5 subcircuit, shared with SIGNEXTEND)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L320-L327"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:320-327</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L268-L276"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:268-276</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L444-L453"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU5 (alu_safe.circom:444-453)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x1b-shl"></a></p>
+
+<h3>0x1b: SHL</h3>
+
+<p><strong>Constraints</strong>: 816 (entire ALU3 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">shift, value</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">value << shift</code></p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const [a, b] = stackPt.popN(2);
+const result = (b.value &lt;&lt; a.value) &amp; ((BigInt(1) &lt;&lt; BigInt(256)) - BigInt(1));
+await synthesizerArith(&#039;SHL&#039;, [a.value, b.value], result, runState);
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU3</code> (shift operations) | <strong>Selector</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 27n</code></li><br><li><strong>Constraints</strong>: 816 (entire ALU3 subcircuit, shared with SHR/SAR)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L329-L335"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:329-335</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L278-L286"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:278-286</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L266-L276"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU3 (alu_safe.circom:266-276)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x1c-shr"></a></p>
+
+<h3>0x1c: SHR</h3>
+
+<p><strong>Constraints</strong>: 816 (entire ALU3 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">shift, value</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">value >> shift</code> (logical shift right)</p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU3</code> | <strong>Selector</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 28n</code></li><br><li><strong>Constraints</strong>: 816 (entire ALU3 subcircuit, shared with SHL/SAR)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L337-L343"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:337-343</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L288-L296"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:288-296</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L278-L287"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU3 (alu_safe.circom:278-287)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x1d-sar"></a></p>
+
+<h3>0x1d: SAR</h3>
+
+<p><strong>Constraints</strong>: 816 (entire ALU3 subcircuit)</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">shift, value</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">value >> shift</code> (arithmetic shift right, sign-extended)</p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Subcircuit</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU3</code> | <strong>Selector</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1n << 29n</code></li><br><li><strong>Constraints</strong>: 816 (entire ALU3 subcircuit, shared with SHL/SHR)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L345-L351"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:345-351</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L298-L306"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:298-306</code></a></li><br><li>Circuit: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L289-L301"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ALU3 (alu_safe.circom:289-301)</code></a></li></p>
+
+<p>---</p>
+
+<p><a id="0x20-keccak256"></a></p>
+
+<h3>0x20: KECCAK256</h3>
+
+<p><strong>Constraints</strong>: ~5000</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">offset, size</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">keccak256(memory[offset:offset+size])</code></p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const [offsetPt, lengthPt] = stackPt.popN(2);
+const offset = offsetPt.value;
+const length = lengthPt.value;
+
+<p>if (length !== BIGINT_0) {<br>  // Load memory data as symbols (DataPts)<br>  const nChunks = Math.ceil(lengthNum / 32);<br>  const chunkDataPts = [];</p>
+
+<p>  for (let i = 0; i &lt; nChunks; i++) {<br>    const dataAliasInfos = memoryPt.getDataAlias(_offset, _length);<br>    chunkDataPts[i] = synthesizer.placeMemoryToStack(dataAliasInfos);<br>  }</p>
+
+<p>  // Hash is computed externally, but circuit tracks inputs<br>  const result = stack.peek(1)[0]; // Get result from EVM execution<br>  stackPt.push(synthesizer.loadAndStoreKeccak(chunkDataPts, result, length));<br>}<br></code></pre></p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Processing</strong>: <strong>External</strong> (hash computed outside circuit)</li><br><li><strong>Tracking</strong>: Input data symbols recorded in circuit</li><br><li><strong>Reason</strong>: Keccak256 is too expensive to compute in-circuit (~100,000 constraints per hash)</li><br><li><strong>Approach</strong>:</li><br>  1. Track input symbols (<a href="synthesizer-terminology.md#datapt-data-point">DataPts</a> from memory)<br>  2. Compute hash externally (standard Keccak256)<br>  3. Load result as <a href="synthesizer-terminology.md#auxiliary-input-auxin">auxiliary input</a><br>  4. Circuit verifies correct inputs were hashed (not the hash itself)</p>
+
+<p>#### Why External?</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>In-circuit Keccak256: ~100,000 constraints per hash
+Large contract with 10 hashes: 1,000,000 constraints just for hashing
+Solution: Compute hash externally, verify inputs/outputs
+</code></pre>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L190-L197"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:190-197</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L322-L375"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:322-375</code></a></li><br><li>Note: Keccak256 is computed externally, not in-circuit</li></p>
+
+<p>---</p>
+
+<p><a id="0x30-address"></a></p>
+
+<h3>0x30: ADDRESS</h3>
+
+<p><strong>Constraints</strong>: ~100</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">-</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">address(this)</code> (current contract address)</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>await synthesizerEnvInf(&#039;ADDRESS&#039;, runState);
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong><a href="synthesizer-terminology.md#buffer-placements">Buffer</a></strong>: <a href="synthesizer-terminology.md#pub-in-and-pub-out"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PUB_IN</code></a> (Placement 0)</li><br><li><strong>Flow</strong>:</li><br>  1. External value (contract address) → PUB_IN buffer<br>  2. Buffer creates <a href="synthesizer-terminology.md#datapt-data-point">DataPt</a> symbol<br>  3. Symbol pushed to <a href="synthesizer-terminology.md#stackpt">StackPt</a></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L355-L358"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:355-358</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L377-L382"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:377-382</code></a></li><br><li>Circuit: Buffer operation (PUB_IN placement)</li></p>
+
+<p>---</p>
+
+<p><a id="0x35-calldataload"></a></p>
+
+<h3>0x35: CALLDATALOAD</h3>
+
+<p><strong>Constraints</strong>: ~100</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">i</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">calldata[i:i+32]</code> (32 bytes, zero-padded if needed)</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const pos = stackPt.pop().value;
+await synthesizerEnvInf(&#039;CALLDATALOAD&#039;, runState, undefined, pos);
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Buffer</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PUB_IN</code> (Placement 0) - Calldata is public</li><br><li><strong>Processing</strong>:</li><br>  1. Load calldata value at position<br>  2. Create DataPt via PUB_IN buffer<br>  3. Push symbol to StackPt<br><li><strong>Constraints</strong>: ~100 (buffer operation)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L383-L387"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:383-387</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L418-L425"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:418-425</code></a></li><br><li>Circuit: Buffer operation (PUB_IN placement)</li></p>
+
+<p>---</p>
+
+<p><a id="0x37-calldatacopy"></a></p>
+
+<h3>0x37: CALLDATACOPY</h3>
+
+<p><strong>Constraints</strong>: ~100</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">destOffset, offset, size</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">-</code> (copies calldata to memory)</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const [memOffset, dataOffset, dataLength] = stackPt.popN(3);
+
+<p>if (dataLength.value !== BIGINT_0) {<br>  // Load calldata as DataPt symbols<br>  const dataPt = synthesizer.loadEnvInf(<br>    env.address.toString(),<br>    &#039;Calldata&#039;,<br>    bytesToBigInt(data),<br>    Number(dataOffset.value),<br>    Number(dataLength.value)<br>  );</p>
+
+<p>  // Write symbols to MemoryPt<br>  memoryPt.write(<br>    Number(memOffset.value),<br>    Number(dataLength.value),<br>    dataPt<br>  );<br>}<br></code></pre></p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Type</strong>: Memory Operation + Environmental Information</li><br><li><strong>Processing</strong>:</li><br>  1. Load calldata from PUB_IN buffer → DataPt<br>  2. Write DataPt to <a href="synthesizer-terminology.md#memorypt">MemoryPt</a> (tracking memory state)<br>  3. MemoryPt handles <a href="synthesizer-terminology.md#data-aliasing">data aliasing</a> if memory overlaps<br><li><strong>Constraints</strong>: ~100 (buffer) + ~5,000 per memory word (if memory circuits needed)</li></p>
+
+<p>#### Memory Aliasing Handling</p>
+
+<p>If CALLDATACOPY overlaps with existing memory:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>Example:
+1. CALLDATACOPY(0x00, 0x00, 64)  // Write calldata to memory 0x00-0x40
+2. MSTORE(0x20, value)           // Overwrite memory 0x20-0x40
+3. MLOAD(0x00)                   // Load memory 0x00-0x20
+
+<p>MemoryPt tracks:<br><li>Calldata symbol at 0x00-0x20 (first 32 bytes)</li><br><li>MSTORE value at 0x20-0x40 (overwrites last 32 bytes of calldata)</li></p>
+
+<p>MLOAD generates circuit to reconstruct first 32 bytes from calldata symbol.<br></code></pre></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L389-L405"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:389-405</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L435-L496"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:435-496</code></a></li><br><li>Circuit: Buffer operation + Memory management</li></p>
+
+<p>---</p>
+
+<p><a id="0x40-blockhash"></a></p>
+
+<h3>0x40: BLOCKHASH</h3>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">blockNumber</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">blockhash(blockNumber)</code> (or 0 if invalid)</p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Type</strong>: Block Information</li><br><li><strong>Buffer</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PUB_IN</code> (Placement 0)</li><br><li><strong>Processing</strong>: Similar to environmental info</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L611-L616"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:611-616</code></a></li><br><li>Circuit: Buffer operation (PUB_IN placement)</li></p>
+
+<p>---</p>
+
+<p><a id="0x41-coinbase"></a></p>
+
+<h3>0x41: COINBASE</h3>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">-</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">block.coinbase</code> (miner address)</p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L619-L624"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:619-624</code></a></li><br><li>Circuit: Buffer operation (PUB_IN placement)</li></p>
+
+<p>---</p>
+
+<p><a id="0x50-pop"></a></p>
+
+<h3>0x50: POP</h3>
+
+<p><strong>Constraints</strong>: 0</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">value</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">-</code> (removes top value)</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>stackPt.pop(); // Remove top DataPt from symbol stack
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Type</strong>: Stack Operation</li><br><li><strong>Processing</strong>: No circuit placement (pure stack manipulation)</li><br><li><strong>Constraints</strong>: 0</li></p>
+
+<p>---</p>
+
+<p><a id="0x51-mload"></a></p>
+
+<h3>0x51: MLOAD</h3>
+
+<p><strong>Constraints</strong>: ~5000</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">offset</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">memory[offset:offset+32]</code></p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const offset = stackPt.pop().value;
+
+<p>// Query MemoryPt for data aliasing info<br>const dataAliasInfos = memoryPt.getDataAlias(Number(offset), 32);</p>
+
+<p>if (dataAliasInfos.length &gt; 0) {<br>  // Generate circuit to reconstruct memory from symbols<br>  const resultPt = synthesizer.placeMemoryToStack(dataAliasInfos);<br>  stackPt.push(resultPt);<br>} else {<br>  // Memory uninitialized, load zero<br>  stackPt.push(synthesizer.loadAuxin(BIGINT_0));<br>}<br></code></pre></p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Type</strong>: Memory Operation with data aliasing resolution</li><br><li><strong>Subcircuits</strong>: DecToBit, Accumulator, Bitwise (AND, OR)</li><br><li><strong>Constraints</strong>: ~5,000 per overlapping DataPt</li></p>
+
+<p>#### Data Aliasing Example</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// Overlapping memory writes:
+1. MSTORE(0x00, 0xAAAA...AAAA)  // Write to 0x00-0x20
+2. MSTORE(0x10, 0xBBBB...BBBB)  // Overlapping write to 0x10-0x30
+3. MLOAD(0x00)                  // Load 0x00-0x20
+
+<p>// MLOAD must reconstruct:<br>// Result = dataPt1[0x00-0x10] | dataPt2[0x10-0x20]</p>
+
+<p>// Circuit:<br>result = (dataPt1 &amp; mask1) | ((dataPt2 &amp; mask2) &lt;&lt; 128)<br></code></pre></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L476-L481"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:476-481</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L632-L648"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:632-648</code></a></li><br><li>Circuit: Memory management with data aliasing (DecToBit + Accumulator + Bitwise)</li></p>
+
+<p>---</p>
+
+<p><a id="0x52-mstore"></a></p>
+
+<h3>0x52: MSTORE</h3>
+
+<p><strong>Constraints</strong>: ~5000</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">offset, value</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">-</code> (writes 32 bytes to memory)</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const [offset, value] = stackPt.popN(2);
+
+<p>// Write DataPt symbol to MemoryPt with timestamp<br>memoryPt.write(Number(offset.value), 32, value);<br></code></pre></p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Type</strong>: Memory Operation</li><br><li><strong>Processing</strong>: Record symbol in MemoryPt with timestamp</li><br><li><strong>Constraints</strong>: 0 (lazy - circuits generated on MLOAD)</li></p>
+
+<p>#### How MemoryPt Tracks State</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>MemoryPt: Map&lt;timestamp, { memOffset, containerSize, dataPt }&gt;
+
+<p>// Each MSTORE increments timestamp:<br>MSTORE(0x00, dataPt1) → timestamp 0<br>MSTORE(0x10, dataPt2) → timestamp 1<br>// Later MLOAD queries for overlaps<br></code></pre></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L483-L489"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:483-489</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L650-L656"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:650-656</code></a></li><br><li>Circuit: Memory tracking (lazy evaluation, circuits generated on MLOAD)</li></p>
+
+<p>---</p>
+
+<p><a id="0x54-sload"></a></p>
+
+<h3>0x54: SLOAD</h3>
+
+<p><strong>Constraints</strong>: ~100</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">key</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">storage[key]</code></p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const keyPt = stackPt.pop();
+const value = await stateManager.getContractStorage(address, key);
+
+<p>// Load storage value as private input<br>const valuePt = synthesizer.loadPrvInf(<br>  address.toString(),<br>  &#039;Storage&#039;,<br>  bytesToBigInt(value),<br>  bytesToBigInt(key)<br>);</p>
+
+<p>stackPt.push(valuePt);<br></code></pre></p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Buffer</strong>: <a href="synthesizer-terminology.md#prv-in-and-prv-out"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PRV_IN</code></a> (Placement 2) - Storage is private by default</li><br><li><strong>Processing</strong>:</li><br>  1. Read storage value from stateManager (external)<br>  2. Load value as DataPt via PRV_IN buffer<br>  3. Push symbol to StackPt<br><li><strong>Constraints</strong>: ~100 (buffer operation)</li></p>
+
+<p>#### Why Private?</p>
+
+<p>Storage values are often sensitive (user balances, private state). The Synthesizer treats storage as private input, allowing users to prove execution without revealing storage contents.</p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L511-L520"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:511-520</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L672-L689"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:672-689</code></a></li><br><li>Circuit: Buffer operation (PRV_IN placement for private storage)</li></p>
+
+<p>---</p>
+
+<p><a id="0x55-sstore"></a></p>
+
+<h3>0x55: SSTORE</h3>
+
+<p><strong>Constraints</strong>: ~100</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">key, value</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">-</code> (writes to storage)</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const [keyPt, valuePt] = stackPt.popN(2);
+
+<p>// Store to state manager (external)<br>await stateManager.putContractStorage(address, key, valuePt.value);</p>
+
+<p>// Record in PRV_OUT buffer<br>synthesizer.storePrvOut(address.toString(), &#039;Storage&#039;, valuePt, key);<br></code></pre></p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Buffer</strong>: <a href="synthesizer-terminology.md#prv-in-and-prv-out"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PRV_OUT</code></a> (Placement 3) - Private outputs</li><br><li><strong>Processing</strong>:</li><br>  1. Write DataPt symbol to PRV_OUT buffer<br>  2. Actual storage update happens externally<br>  3. Circuit tracks which symbols were stored<br><li><strong>Constraints</strong>: ~100 (buffer operation)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L522-L548"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:522-548</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L691-L710"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:691-710</code></a></li><br><li>Circuit: Buffer operation (PRV_OUT placement for private storage updates)</li></p>
+
+<p>---</p>
+
+<p><a id="0x60-0x7f-push1-push32"></a></p>
+
+<h3>0x60-0x7f: PUSH1-PUSH32</h3>
+
+<p><strong>Constraints</strong>: 0</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">-</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">value</code> (pushes 1-32 bytes from bytecode)</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const numToPush = opcode - 0x5f;
+const value = bytesToBigInt(code.subarray(pc + 1, pc + 1 + numToPush));
+
+<p>// Load hardcoded value as auxiliary input<br>const valuePt = synthesizer.loadAuxin(value, numToPush);<br>stackPt.push(valuePt);<br></code></pre></p>
+
+<p>#### Why loadAuxin?</p>
+
+<p>PUSH values are hardcoded in bytecode (not from environment/storage), so they're treated as <a href="synthesizer-terminology.md#auxiliary-input-auxin">auxiliary inputs</a>:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>PUSH1 0x05        → synthesizer.loadAuxin(5, 1)
+PUSH32 0xFFFF...  → synthesizer.loadAuxin(0xFFFF..., 32)
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Type</strong>: Hardcoded constant</li><br><li><strong>Constraints</strong>: 0 (constants don't need circuits)</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L572-L579"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:572-579</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L726-L733"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:726-733</code></a></li><br><li>Circuit: Auxiliary input (hardcoded constants, no circuit needed)</li></p>
+
+<p>---</p>
+
+<p><a id="0x80-0x8f-dup1-dup16"></a></p>
+
+<h3>0x80-0x8f: DUP1-DUP16</h3>
+
+<p><strong>Constraints</strong>: 0</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">..., value_n, ...</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">..., value_n, ..., value_n</code> (duplicates n-th value from top)</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const n = opcode - 0x7f; // 0x80 → 1, 0x8f → 16
+stackPt.dup(n); // Duplicate DataPt reference
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Type</strong>: Stack manipulation</li><br><li><strong>Constraints</strong>: 0 (no circuit needed)</li></p>
+
+<p>---</p>
+
+<p><a id="0x90-0x9f-swap1-swap16"></a></p>
+
+<h3>0x90-0x9f: SWAP1-SWAP16</h3>
+
+<p><strong>Constraints</strong>: 0</p>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">..., value_n+1, ..., value_0</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">..., value_0, ..., value_n+1</code> (swaps top with n+1-th value)</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const n = opcode - 0x8f; // 0x90 → 1, 0x9f → 16
+stackPt.swap(n); // Swap DataPt references
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Type</strong>: Stack manipulation</li><br><li><strong>Constraints</strong>: 0 (no circuit needed)</li></p>
+
+<p>---</p>
+
+<p><a id="0x56-jump"></a></p>
+
+<h3>0x56: JUMP</h3>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">counter</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">-</code> (jumps to destination PC)</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const destPt = stackPt.pop();
+// PC change handled by interpreter
+// No circuit generation (control flow)
+</code></pre>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Type</strong>: Control Flow</li><br><li><strong>Processing</strong>: No circuit (PC manipulation)</li><br><li><strong>Constraints</strong>: 0</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L550-L555"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">functions.ts:550-555</code></a> | <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L713-L723"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:713-723</code></a></li><br><li>Circuit: Control flow (no circuit needed)</li></p>
+
+<p>---</p>
+
+<p><a id="0xf0-create"></a></p>
+
+<h3>0xf0: CREATE</h3>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">value, offset, size</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">address</code> (new contract address, or 0 if failed)</p>
+
+<p>#### Status</p>
+
+<p>❌ <strong>Not Supported</strong></p>
+
+<p>#### Reason</p>
+
+<p>The Tokamak zk-EVM is designed specifically for Layer 2 state channel applications, where contract creation is not required. Contract creation requires:</p>
+
+<p><li>Context switching circuits (~10,000 constraints)</li><br><li>Deployment code execution tracking</li><br><li>Address computation verification</li></p>
+
+<p><strong>Note</strong>: There are no plans to support this opcode, as it is outside the scope of state channel use cases.</p>
+
+<p>---</p>
+
+<p><a id="0xf3-return"></a></p>
+
+<h3>0xf3: RETURN</h3>
+
+<p><strong>Stack</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">offset, size</code> → <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">-</code> (halts execution, returns memory[offset:offset+size])</p>
+
+<p>#### Synthesizer Behavior</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>const [offsetPt, lengthPt] = stackPt.popN(2);
+
+<p>if (lengthPt.value !== BIGINT_0) {<br>  // Load return data from memory as symbols<br>  const offset = Number(offsetPt.value);<br>  const length = Number(lengthPt.value);</p>
+
+<p>  const dataAliasInfos = memoryPt.getDataAlias(offset, length);</p>
+
+<p>  // Generate circuits to reconstruct return data<br>  for (const info of dataAliasInfos) {<br>    const dataPt = synthesizer.placeMemoryToStack([info]);<br>    synthesizer.storePubOut(dataPt); // Write to PUB_OUT buffer<br>  }<br>}<br></code></pre></p>
+
+<p>#### Circuit Generation</p>
+
+<p><li><strong>Type</strong>: System Operation</li><br><li><strong>Buffer</strong>: <a href="synthesizer-terminology.md#pub-in-and-pub-out"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PUB_OUT</code></a> (Placement 1) - Return data is public</li><br><li><strong>Processing</strong>:</li><br>  1. Load return data from MemoryPt (with aliasing resolution)<br>  2. Generate circuits to reconstruct data<br>  3. Write symbols to PUB_OUT buffer<br><li><strong>Constraints</strong>: ~5,000 per memory segment</li></p>
+
+<p><strong>Source</strong>:</p>
+
+<p><li>Synthesizer: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L845-L868"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">handlers.ts:845-868</code></a></li><br><li>Circuit: Buffer operation (PUB_OUT placement) + Memory reconstruction</li></p>
+
+<p>---</p>
+
+<p><a id="0xfd-revert"></a></p>
+
+<h3>0xfd: REVERT</h3>
+
+<p><strong>Opcode</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0xfd</code>  <br><strong>Mnemonic</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">REVERT</code></p>
+
+<p>#### Status</p>
+
+<p>❌ <strong>Not Supported</strong></p>
+
+<p>#### Reason</p>
+
+<p>The Tokamak zk-EVM is designed specifically for Layer 2 state channel applications, where revert handling is not required. Revert handling requires:</p>
+
+<p><li>State rollback tracking</li><br><li>Error data propagation</li><br><li>Gas refund calculations</li></p>
+
+<p><strong>Note</strong>: There are no plans to support this opcode, as it is outside the scope of state channel use cases.</p>
+
+<p>---</p>
+
+<p><a id="0xff-selfdestruct"></a></p>
+
+<h3>0xff: SELFDESTRUCT</h3>
+
+<p><strong>Opcode</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0xff</code>  <br><strong>Mnemonic</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">SELFDESTRUCT</code></p>
+
+<p>#### Status</p>
+
+<p>❌ <strong>Not Supported</strong></p>
+
+<p>#### Reason</p>
+
+<p>The Tokamak zk-EVM is designed specifically for Layer 2 state channel applications, where self-destruct is not required. Self-destruct requires:</p>
+
+<p><li>Balance transfer verification</li><br><li>Contract deletion tracking</li><br><li>Beneficiary updates</li></ul></p>
+
+<p><strong>Note</strong>: There are no plans to support this opcode, as it is outside the scope of state channel use cases.</p>
+
+<p>---</p>
+
+<h2>Circuit Complexity Summary</h2>
+
+<h3>Constraint Counts by Operation Type</h3>
+
+<p>| Operation Type          | Constraints (from QAP Compiler) | Example Opcodes               |<br>| ----------------------- | ------------------------------- | ----------------------------- |<br>| <strong>ALU1 Operations</strong>     | 803                             | ADD, SUB, MUL, EQ, ISZERO     |<br>| <strong>ALU2 Operations</strong>     | 993                             | DIV, MOD, SDIV, SMOD, ADDMOD  |<br>| <strong>ALU3 Operations</strong>     | 816                             | SHL, SHR, SAR                 |<br>| <strong>ALU4 Operations</strong>     | 629                             | LT, GT, SLT, SGT              |<br>| <strong>ALU5 Operations</strong>     | 819                             | SIGNEXTEND, BYTE              |<br>| <strong>Bitwise Operations</strong>  | 774                             | AND, OR, XOR                  |<br>| <strong>Bit Decomposition</strong>   | 258                             | DecToBit (used in EXP)        |<br>| <strong>Exponentiation</strong>      | 258 + (803 × bit_length)        | EXP (e.g., 3^13 = 3,470)      |<br>| <strong>Memory Operations</strong>   | Variable                        | MLOAD, MSTORE (with aliasing) |<br>| <strong>External Operations</strong> | 0 (processed outside)           | KECCAK256                     |</p>
+
+<p>---</p>
+
+<h2>Appendix: Subcircuit Mapping Table</h2>
+
+<p>| Opcode | Operation  | Subcircuit    | Selector  | Constraints | Non-linear | Linear |<br>| ------ | ---------- | ------------- | --------- | ----------- | ---------- | ------ |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x01</code> | ADD        | ALU1          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 1</code>  | 803         | 630        | 173    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x02</code> | MUL        | ALU1          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 2</code>  | 803         | 630        | 173    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x03</code> | SUB        | ALU1          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 3</code>  | 803         | 630        | 173    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x04</code> | DIV        | ALU2          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 4</code>  | 993         | 566        | 427    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x05</code> | SDIV       | ALU2          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 5</code>  | 993         | 566        | 427    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x06</code> | MOD        | ALU2          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 6</code>  | 993         | 566        | 427    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x07</code> | SMOD       | ALU2          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 7</code>  | 993         | 566        | 427    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x08</code> | ADDMOD     | ALU2          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 8</code>  | 993         | 566        | 427    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x09</code> | MULMOD     | ALU2          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 9</code>  | 993         | 566        | 427    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x0a</code> | EXP        | ALU1 (SubEXP) | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 10</code> | ~206,000    | -          | -      |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x0b</code> | SIGNEXTEND | ALU5          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 11</code> | 819         | 640        | 179    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x10</code> | LT         | ALU4          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 16</code> | 629         | 594        | 35     |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x11</code> | GT         | ALU4          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 17</code> | 629         | 594        | 35     |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x12</code> | SLT        | ALU4          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 18</code> | 629         | 594        | 35     |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x13</code> | SGT        | ALU4          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 19</code> | 629         | 594        | 35     |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x14</code> | EQ         | ALU1          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 20</code> | 803         | 630        | 173    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x15</code> | ISZERO     | ALU1          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 21</code> | 803         | 630        | 173    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x16</code> | AND        | AND           | -         | 774         | 768        | 6      |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x17</code> | OR         | OR            | -         | 774         | 768        | 6      |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x18</code> | XOR        | XOR           | -         | 774         | 768        | 6      |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x19</code> | NOT        | ALU1          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 25</code> | 803         | 630        | 173    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x1a</code> | BYTE       | ALU5          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 26</code> | 819         | 640        | 179    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x1b</code> | SHL        | ALU3          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 27</code> | 816         | 638        | 178    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x1c</code> | SHR        | ALU3          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 28</code> | 816         | 638        | 178    |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0x1d</code> | SAR        | ALU3          | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">1 << 29</code> | 816         | 638        | 178    |</p>
+
+<p>_Source: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler/subcircuits/library/info"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">packages/frontend/qap-compiler/subcircuits/library/info/</code></a> - Compiled subcircuit constraint information from Circom circuits_<br></p>
+  
+  <hr style="margin-top: 60px; border: none; border-top: 1px solid #ddd;">
+  <p style="color: #7f8c8d; font-size: 0.9em;">
+    <em>이 문서는 <a href="https://YOUR-USERNAME.github.io/tokamak-zk-evm-docs">Tokamak zk-EVM Documentation</a>에서 변환되었습니다.</em>
+  </p>
+</body>
+</html>

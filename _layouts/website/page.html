@@ -3,4 +3,13 @@
 {% block javascript %}
 {{ super() }}
 <script src="{{ 'styles/page-toc.js'|resolveFile }}"></script>
+
+<!-- Hypothesis - 텍스트 선택해서 인라인 댓글 -->
+<script type="application/json" class="js-hypothesis-config">
+  {
+    "openSidebar": false,
+    "theme": "clean"
+  }
+</script>
+<script async src="https://hypothes.is/embed.js"></script>
 {% endblock %}

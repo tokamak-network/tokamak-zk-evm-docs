@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synthesizer-data-structure</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+    h2 { color: #34495e; margin-top: 30px; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; }
+    h3 { color: #7f8c8d; margin-top: 20px; }
+    code { font-family: 'Monaco', 'Courier New', monospace; font-size: 0.9em; }
+    pre { line-height: 1.4; }
+    a { color: #3498db; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { display: block; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px; }
+    ul { margin: 15px 0; padding-left: 30px; }
+    li { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>Synthesizer: Data Structures</h1>
+
+<p>This document explains the core data structures used in the Tokamak <a href="synthesizer-terminology.md#synthesizer">Synthesizer</a> for <a href="synthesizer-terminology.md#symbol-processing">symbol processing</a> and circuit generation.</p>
+
+<p>---</p>
+
+<h2>On This Page</h2>
+
+<ul><li><a href="#overview">Overview</a></li>
+<li><a href="#datapt-data-point">DataPt (Data Point)</a></li>
+<li><a href="#stackpt-symbol-stack">StackPt (Symbol Stack)</a></li>
+<li><a href="#memorypt-symbol-memory">MemoryPt (Symbol Memory)</a></li>
+<li><a href="#placement">Placement</a></li>
+
+<p>---</p>
+
+<h2>Overview</h2>
+
+<p>The Synthesizer uses <strong>symbol-based processing</strong> instead of value-based computation. This document explains the four core data structures that enable circuit generation:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>┌─────────────────────────────────────────────────────────────────────┐
+│  Synthesizer Data Structures: From Values to Circuits               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  [1] DataPt (Data Point)                                            │
+│      ┌────────────────────────────────────┐                        │
+│      │  Symbol = Value + Traceability     │                        │
+│      │  { value: 10n, source: 0, wire: 0 }│                        │
+│      └────────────────────────────────────┘                        │
+│               ↓                       ↓                             │
+│                                                                     │
+│  [2] StackPt              [3] MemoryPt                             │
+│      ┌──────────────┐        ┌──────────────────┐                 │
+│      │ DataPt[]     │        │ Map&lt;time, DataPt&gt;│                 │
+│      │ (Symbolic    │        │ (2D: offset×time)│                 │
+│      │  Stack)      │        │ (Aliasing track) │                 │
+│      └──────────────┘        └──────────────────┘                 │
+│               ↓                       ↓                             │
+│               └───────────┬───────────┘                             │
+│                           ↓                                         │
+│                                                                     │
+│  [4] Placement (Subcircuit Instance)                               │
+│     ┌──────────────────────────────────────┐                       │
+│     │ name: &#039;ALU1&#039;                         │                       │
+│     │ usage: &#039;ADD&#039;                         │                       │
+│     │ inPts: [DataPt, DataPt] ──&gt; Circuit │                       │
+│     │ outPts: [DataPt] ───────────────────&gt;│                       │
+│     └──────────────────────────────────────┘                       │
+│                          │                                          │
+│                          └──&gt; Forms DAG (Circuit Graph)             │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+</code></pre>
+
+<h3>Symbol-Based Processing</h3>
+
+<p>Each piece of data is represented as a <strong>DataPt</strong> (Data Point), which tracks:</p>
+
+<p><li><strong>Value</strong>: The actual data (bigint)</li><br><li><strong>Source</strong>: Where the data came from (<a href="synthesizer-terminology.md#placement">placement</a> ID or external source)</li><br><li><strong><a href="synthesizer-terminology.md#wire-index">Wire Index</a></strong>: Which output <a href="synthesizer-terminology.md#wire">wire</a> from the source <a href="synthesizer-terminology.md#subcircuit">subcircuit</a></li><br><li><strong>Metadata</strong>: Type, size, and other context information</li></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// EVM: Value-based processing
+const result = a + b; // Just the final value
+
+<p>// Synthesizer: Symbol-based processing<br>const aPt = { source: 0, wireIndex: 0, value: 10n, ... };<br>const bPt = { source: 0, wireIndex: 1, value: 20n, ... };<br>const resultPt = synthesizer.placeArith(&#039;ADD&#039;, [aPt, bPt]); // Tracks entire data flow<br></code></pre></p>
+
+<p>---</p>
+
+<h2>DataPt (Data Point)</h2>
+
+<h3>Concept</h3>
+
+<p>DataPt is a <strong>symbol</strong> that represents data flowing through the circuit. Think of it as a "tracking tag" attached to each piece of data:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>┌─────────────────────────────────────────────────────────────┐
+│  DataPt: A Symbol Tracking Data Flow                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌──────────┐   source=4      ┌────────────┐              │
+│  │  Value   │   wireIndex=0   │ Traceability│              │
+│  │  15n     │   ─────────────&gt;│ Information │              │
+│  └──────────┘                  └────────────┘              │
+│       ↓                              │                      │
+│  What data?                    Where from?                  │
+│  (actual value)           (placement + wire)                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+</code></pre>
+
+<p><strong>Key Roles</strong>:</p>
+
+<p>1. <strong>Traceability</strong>: Track where data originates (source placement, wire index)<br>2. <strong>Circuit Generation</strong>: Connect subcircuit outputs to inputs via wire indices<br>3. <strong>Value Tracking</strong>: Maintain actual values for consistency checks<br>4. <strong>External Interface</strong>: Bridge between Ethereum state and circuit <a href="synthesizer-terminology.md#symbol-processing">symbols</a></p>
+
+<h3>Visual: DataPt Journey</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>External Value          DataPt Creation              Circuit Usage
+──────────────          ───────────────              ─────────────
+
+<p>calldata[0] = 5   ─┐<br>                   ├──&gt; DataPt {                ┌──&gt; Used as input<br>                   │      value: 5n,             │    to ALU1<br>                   │      source: 0,        ─────┤<br>                   │      wireIndex: 0,          │<br>Block info        ─┤      type: &#039;Calldata&#039;       └──&gt; Tracked in<br>                   │    }                             circuit graph<br>Storage value     ─┘<br></code></pre></p>
+
+<h3>Definition</h3>
+
+<p><strong>Source</strong>: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/types/synthesizer.ts#L48-L69"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">types/synthesizer.ts:48-69</code></a></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>export interface CreateDataPointParams {
+  // Placement index at which the dataPt comes from
+  source: number;
+
+<p>  // Wire index at which the dataPt comes from (within the source placement)<br>  wireIndex?: number;</p>
+
+<p>  // Actual value of the data<br>  value: bigint;</p>
+
+<p>  // Size of the data source (in bytes)<br>  sourceSize: number;</p>
+
+<p>  // === External Source Information (if applicable) ===<br>  // Address/identifier if data comes from external source<br>  extSource?: string;</p>
+
+<p>  // Address/identifier if data goes to external destination<br>  extDest?: string;</p>
+
+<p>  // Type of external data (e.g., &#039;CALLDATA&#039;, &#039;BLOCKHASH&#039;, &#039;Storage&#039;)<br>  type?: string;</p>
+
+<p>  // Key if the external data comes from or goes to a DB (e.g., storage key)<br>  key?: string;</p>
+
+<p>  // Offset if the external data comes from memory<br>  offset?: number;<br>}</p>
+
+<p>export type DataPt = CreateDataPointParams &amp; { valueHex: string };<br></code></pre></p>
+
+<h3>Creation</h3>
+
+<p><strong>Source</strong>: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/pointers/dataPointFactory.ts#L6-L16"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">pointers/dataPointFactory.ts:6-16</code></a></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>export class DataPointFactory {
+  public static create(params: CreateDataPointParams): DataPt {
+    SynthesizerValidator.validateValue(params.value);
+    const hex = params.value.toString(16);
+    const paddedHex = hex.length % 2 === 1 ? &#039;0&#039; + hex : hex;
+    const valueHex = &#039;0x&#039; + paddedHex;
+
+<p>    return {<br>      ...params,<br>      valueHex,<br>    };<br>  }<br>}<br></code></pre></p>
+
+<h3>Example: DataPt Lifecycle</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// Step 1: Load external data as DataPt
+const calldataPt = synthesizer.loadEnvInf(
+  address,
+  &#039;Calldata&#039;,
+  0x05n,  // value
+  0,      // offset
+  1       // size
+);
+// Result: { source: 0, wireIndex: 0, value: 5n, type: &#039;Calldata&#039;, ... }
+
+<p>// Step 2: Use DataPt in arithmetic operation<br>const constantPt = synthesizer.loadAuxin(10n);<br>// Result: { source: 0, wireIndex: 1, value: 10n, ... }</p>
+
+<p>// Step 3: Generate circuit placement<br>const resultPt = synthesizer.placeArith(&#039;ADD&#039;, [calldataPt, constantPt]);<br>// Result: { source: 4, wireIndex: 0, value: 15n, ... }<br>// source=4 means this comes from placement #4 (the ADD subcircuit)</p>
+
+<p>// Step 4: Store to external state<br>synthesizer.storePrvOut(address, &#039;Storage&#039;, resultPt, storageKey);<br></code></pre></p>
+
+<h3>Key Fields Explained</h3>
+
+<p>| Field        | Type      | Purpose                            | Example                   |<br>| ------------ | --------- | ---------------------------------- | ------------------------- |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">source</code>     | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">number</code>  | Placement ID where data originates | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">4</code> (from placement #4)   |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">wireIndex</code>  | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">number?</code> | Output wire index from source      | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">0</code> (first output)        |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">value</code>      | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">bigint</code>  | Actual data value                  | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">15n</code>                     |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">valueHex</code>   | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">string</code>  | Hex representation                 | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">"0x0f"</code>                  |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">sourceSize</code> | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">number</code>  | Data size in bytes                 | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">32</code>                      |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">extSource</code>  | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">string?</code> | External source address            | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">"0x123...abc"</code>           |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">type</code>       | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">string?</code> | External data type                 | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">"Calldata"</code>, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">"Storage"</code> |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">key</code>        | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">string?</code> | Storage key (if applicable)        | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">"0x00...01"</code>             |<br>| <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">offset</code>     | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">number?</code> | Memory offset (if applicable)      | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">64</code>                      |</p>
+
+<p>---</p>
+
+<h2>StackPt (Symbol Stack)</h2>
+
+<h3>Concept</h3>
+
+<p><a href="synthesizer-terminology.md#stackpt">StackPt</a> is the <strong>symbolic equivalent</strong> of the EVM stack. While the EVM stack holds actual values for computation, StackPt holds DataPt symbols for tracking data flow:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>EVM Stack                          StackPt (Symbol Stack)
+─────────────────                  ──────────────────────────────
+
+<p>┌──────────────┐                   ┌───────────────────────────┐<br>│     30       │ ← value           │ DataPt { value: 30n,      │<br>├──────────────┤                   │          source: 4,       │<br>│     20       │                   │          wireIndex: 0 }   │<br>├──────────────┤                   ├───────────────────────────┤<br>│     10       │                   │ DataPt { value: 20n,      │<br>└──────────────┘                   │          source: 0,       │<br>                                   │          wireIndex: 1 }   │<br> Stores values                     ├───────────────────────────┤<br> for execution                     │ DataPt { value: 10n,      │<br>                                   │          source: 0,       │<br>                                   │          wireIndex: 0 }   │<br>                                   └───────────────────────────┘</p>
+
+<p>                                    Stores symbols<br>                                    for circuit generation<br></code></pre></p>
+
+<h3>Visual: Parallel Processing</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>Opcode: 0x01 ADD
+
+<p>┌─────────────────────────────┐  ┌──────────────────────────────────┐<br>│   EVM Stack (functions.ts)  │  │  StackPt (handlers.ts)           │<br>├─────────────────────────────┤  ├──────────────────────────────────┤<br>│                             │  │                                  │<br>│  pop: [10, 20]              │  │  pop: [DataPt{10}, DataPt{20}]   │<br>│       ↓                     │  │        ↓                         │<br>│  compute: 10 + 20 = 30      │  │  place: ALU1(selector, 10, 20)   │<br>│       ↓                     │  │        ↓                         │<br>│  push: 30                   │  │  push: DataPt{30, source:4}      │<br>│                             │  │                                  │<br>│  Result: Value only         │  │  Result: Value + Traceability    │<br>└─────────────────────────────┘  └──────────────────────────────────┘<br></code></pre></p>
+
+<h3>Comparison</h3>
+
+<p>| Aspect        | EVM Stack                     | StackPt                               |<br>| ------------- | ----------------------------- | ------------------------------------- |<br>| <strong>Data Type</strong> | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">bigint[]</code> (values)           | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">DataPt[]</code> (symbols)                  |<br>| <strong>Purpose</strong>   | Execute operations            | Track data flow                       |<br>| <strong>Push</strong>      | Pushes actual value           | Pushes symbol reference               |<br>| <strong>Pop</strong>       | Returns value for computation | Returns symbol for circuit generation |<br>| <strong>Operation</strong> | Performs arithmetic           | Records circuit connections           |</p>
+
+<h3>Definition</h3>
+
+<p><strong>Source</strong>: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/pointers/stackPt.ts#L1-L56"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">pointers/stackPt.ts:1-56</code></a></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>export type TStackPt = DataPt[];
+
+<p>export class StackPt {<br>  private _stack: TStackPt;<br>  private _len: number;<br>  private _maxHeight: number;</p>
+
+<p>  constructor(maxHeight = 1024) {<br>    this._stack = [];<br>    this._len = 0;<br>    this._maxHeight = maxHeight;<br>  }</p>
+
+<p>  public push(dataPt: DataPt): void;<br>  public pop(): DataPt;<br>  public popN(num: number): DataPt[];<br>  public swap(position: number): void;<br>  public dup(position: number): void;<br>  // ... more methods<br>}<br></code></pre></p>
+
+<h3>Key Differences from EVM Stack</h3>
+
+<p><strong>Source Comment</strong>: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/pointers/stackPt.ts#L6-L26"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">pointers/stackPt.ts:6-26</code></a></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>/*<em>
+ </em> Key differences between Stack and StackPt classes
+ <em>
+ </em> 1. Data Type
+ <em>    - Stack: bigint[] (stores actual values)
+ </em>    - StackPt: DataPt[] (stores data pointers)
+ <em>
+ </em> 2. Purpose
+ <em>    - Stack: Used in actual EVM execution
+ </em>    - StackPt: Used for symbolic execution
+ <em>
+ </em> 3. Operation Handling
+ <em>    - Stack: Performs operations on actual values (e.g., actual addition)
+ </em>    - StackPt: Manages pointers for data flow tracking
+ <em>
+ </em> 4. Usage
+ <em>    - Stack: Actual transaction processing, contract execution
+ </em>    - StackPt: Program analysis, optimization, circuit generation
+ <em>/
+</code></pre>
+
+<h3>Example: Parallel Stack Processing</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// EVM Stack (functions.ts) - Opcode 0x01: ADD
+const [a, b] = runState.stack.popN(2);
+const result = (a + b) % TWO_POW256;
+runState.stack.push(result);
+// Stack: [10, 20] → [30]
+
+<p>// StackPt (handlers.ts) - Opcode 0x01: ADD<br>const [aPt, bPt] = runState.stackPt.popN(2);<br>const resultPt = synthesizer.placeArith(&#039;ADD&#039;, [aPt, bPt]);<br>runState.stackPt.push(resultPt);<br>// StackPt: [DataPt{10}, DataPt{20}] → [DataPt{30, source:4}]<br></code></pre></p>
+
+<h3>Memory Management Optimization</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>/</em><em>
+ </em> 2. Memory Management
+ <em>    - Once allocated, array size never decreases
+ </em>    - During pop operations, _len is decreased instead of actually deleting items
+ <em>    - This is an optimization strategy to reduce memory reallocation costs
+ </em>/
+
+<p>// Implementation<br>public pop(): DataPt {<br>  if (this._len &lt; 1) {<br>    throw new EvmError(ERROR.STACK_UNDERFLOW);<br>  }<br>  const dataPt = this._stack[this._len - 1];<br>  this._len--; // Decrease length, don&#039;t delete item<br>  return dataPt;<br>}<br></code></pre></p>
+
+<p>---</p>
+
+<h2>MemoryPt (Symbol Memory)</h2>
+
+<h3>Concept</h3>
+
+<p>MemoryPt is a <strong>2D data structure</strong> (offset × time) that solves the <strong><a href="synthesizer-terminology.md#data-aliasing">data aliasing problem</a></strong> in memory. Unlike EVM memory which only keeps the latest value, MemoryPt tracks all overlapping writes:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>EVM Memory (1D)                  MemoryPt (2D: offset × time)
+───────────────                  ────────────────────────────
+
+<p>Memory Array:                    Timestamp Map:<br>┌────┬────┬────┬────┐<br>│ 00 │ 10 │ 20 │ 30 │ ← offset  timestamp=0: { offset: 0x00, size: 32, dataPt1 }<br>└────┴────┴────┴────┘            timestamp=1: { offset: 0x10, size: 32, dataPt2 }<br>  │                              timestamp=2: { offset: 0x08, size: 16, dataPt3 }<br>  └─&gt; Only latest value<br>      (old values lost)          ↑<br>                                 All writes preserved with timestamps!<br></code></pre></p>
+
+<h3>Visual: The Data Aliasing Problem</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>Time ─────────────────────────────────────────&gt;
+
+<p>t=0: MSTORE(0x00, dataPt1)     Write 32 bytes at 0x00-0x20<br>     ┌────────────────────────────────┐<br>     │         dataPt1 (value=100)    │<br>     └────────────────────────────────┘<br>     0x00                          0x20</p>
+
+<p>t=1: MSTORE(0x10, dataPt2)     Write 32 bytes at 0x10-0x30 (overlaps!)<br>                   ┌────────────────────────────────┐<br>                   │         dataPt2 (value=200)    │<br>                   └────────────────────────────────┘<br>                   0x10                          0x30</p>
+
+<p>t=2: MLOAD(0x00, 32)           Load 32 bytes at 0x00-0x20</p>
+
+<p>     ┌──────────────┬──────────────┐<br>     │   dataPt1    │   dataPt2    │  ← Need BOTH!<br>     │  (bytes 0-15)│  (bytes 0-15)│<br>     └──────────────┴──────────────┘<br>     0x00          0x10          0x20</p>
+
+<p>EVM Result:    Only sees final state (loses history)<br>MemoryPt:      Returns DataAliasInfos for circuit generation<br></code></pre></p>
+
+<h3>How MemoryPt Solves This</h3>
+
+<p>| Aspect             | EVM Memory                      | MemoryPt                         |<br>| ------------------ | ------------------------------- | -------------------------------- |<br>| <strong>Data Structure</strong> | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Uint8Array</code> (continuous bytes) | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Map<timestamp, MemoryPtEntry></code>  |<br>| <strong>Write</strong>          | Overwrites bytes directly       | Records timestamped data points  |<br>| <strong>Read</strong>           | Returns current byte values     | Returns data alias information   |<br>| <strong>Aliasing</strong>       | Lost (only latest value)        | Tracked (all overlapping writes) |</p>
+
+<h3>Definition</h3>
+
+<p><strong>Source</strong>: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/pointers/memoryPt.ts#L163-L436"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">pointers/memoryPt.ts:163-436</code></a></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>export type TMemoryPt = Map&lt;number, MemoryPtEntry&gt;;
+
+<p>export interface MemoryPtEntry {<br>  memOffset: number;    // Memory start offset<br>  containerSize: number; // Size of data in bytes<br>  dataPt: DataPt;       // Data point reference<br>}</p>
+
+<p>export class MemoryPt {<br>  _storePt: TMemoryPt;<br>  private _timeStamp: number;</p>
+
+<p>  constructor() {<br>    this._storePt = new Map();<br>    this._timeStamp = 0;<br>  }</p>
+
+<p>  public write(offset: number, size: number, dataPt: DataPt): void;<br>  public getDataAlias(offset: number, size: number): DataAliasInfos;<br>  // ... more methods<br>}<br></code></pre></p>
+
+<h3>Implementation Details</h3>
+
+<p><strong>Source Comment</strong>: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/pointers/memoryPt.ts#L135-L161"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">pointers/memoryPt.ts:135-161</code></a></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>/*<em>
+ </em> 3. Read/Write Operations
+ <em>    - Memory: Direct read/write to actual memory
+ </em>    - MemoryPt:
+ <em>      - Write: Creates new data pointers and manages overlapping regions
+ </em>      - Read: Returns data alias information through getDataAlias
+ <em>
+ </em> 5. Characteristics
+ <em>    - MemoryPt:
+ </em>      - Timestamp-based data management
+ <em>      - Memory region conflict detection
+ </em>      - Data alias information generation
+ */
+</code></pre>
+
+<h3>Example: Overlapping Memory Writes</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// Scenario: Overlapping MSTORE operations
+1. MSTORE(0x00, dataPt1)  // Write 32 bytes at 0x00-0x20, timestamp=0
+2. MSTORE(0x10, dataPt2)  // Write 32 bytes at 0x10-0x30, timestamp=1
+3. MLOAD(0x00)            // Load 32 bytes at 0x00-0x20
+
+<p>// MemoryPt tracks both writes:<br>_storePt = {<br>  0: { memOffset: 0x00, containerSize: 32, dataPt: dataPt1 },<br>  1: { memOffset: 0x10, containerSize: 32, dataPt: dataPt2 }<br>}</p>
+
+<p>// MLOAD(0x00) generates DataAliasInfos:<br>[<br>  {<br>    dataPt: dataPt1,<br>    shift: 0,      // Use bytes 0-15 from dataPt1<br>    masker: 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000000000000000000000000000<br>  },<br>  {<br>    dataPt: dataPt2,<br>    shift: 128,    // Use bytes 0-15 from dataPt2 (shifted left by 128 bits)<br>    masker: 0x00000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF<br>  }<br>]</p>
+
+<p>// Circuit generation:<br>// result = (dataPt1 &amp; mask1) | ((dataPt2 &gt;&gt; 128) &amp; mask2)<br></code></pre></p>
+
+<h3>Data Alias Information</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>export interface DataAliasInfo {
+  dataPt: DataPt;    // Source data point
+  shift: number;     // Bit shift for alignment
+  masker: bigint;    // Mask for extracting relevant bits
+}
+
+<p>export type DataAliasInfos = DataAliasInfo[];<br></code></pre></p>
+
+<p>The <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">getDataAlias()</code> method returns information needed to reconstruct memory data from overlapping writes, which is then used to generate circuits (using DecToBit, Accumulator, and bitwise operations).</p>
+
+<p>---</p>
+
+<h2>Placement</h2>
+
+<h3>Concept</h3>
+
+<p>A <strong>Placement</strong> is an <strong>instance</strong> of a <a href="synthesizer-terminology.md#subcircuit">subcircuit</a> with specific input/output data. Think of it like an object created from a class:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>Subcircuit (Template/Class)     Placement (Instance/Object)
+───────────────────────────     ──────────────────────────
+
+<p>┌─────────────────────┐          ┌────────────────────────┐<br>│  ALU1.circom        │  ─────&gt;  │  Placement ID: 4       │<br>│                     │          │  name: &#039;ALU1&#039;          │<br>│  - Defines circuit  │          │  usage: &#039;ADD&#039;          │<br>│  - Has 803          │          │  inPts: [sel, a, b]    │<br>│    constraints      │          │  outPts: [result]      │<br>│  - Can do ADD, MUL, │          └────────────────────────┘<br>│    SUB, etc.        │<br>└─────────────────────┘          ┌────────────────────────┐<br>                         ─────&gt;  │  Placement ID: 5       │<br>                                 │  name: &#039;ALU1&#039;          │<br>                                 │  usage: &#039;MUL&#039;          │<br>                                 │  inPts: [sel, x, y]    │<br>                                 │  outPts: [product]     │<br>                                 └────────────────────────┘</p>
+
+<p>One template, multiple instances with different data!<br></code></pre></p>
+
+<h3>Visual: Placement Creation Flow</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>Opcode Execution          Placement Creation              Circuit Graph
+────────────────          ──────────────────              ─────────────
+
+<p>ADD instruction     ─&gt;  1. Select subcircuit      ─&gt;  Placement #4<br>                           (ALU1, selector=2)          ┌──────────┐<br>Pop stack:                                              │   ALU1   │<br>  a = DataPt{10}    ─&gt;  2. Gather inputs          ─&gt;  │  ADD     │<br>  b = DataPt{20}           [sel, aPt, bPt]             │          │<br>                                                        │ in:  [2, │<br>Compute:            ─&gt;  3. Create output          ─&gt;  │   10, 20]│<br>  result = 30              DataPt{30, source:4}        │ out: [30]│<br>                                                        └──────────┘<br>Push result         ─&gt;  4. Store placement             │<br>                           placements.set(4, ...)       └─&gt; Used by<br>                                                            next op<br></code></pre></p>
+
+<h3>Purpose</h3>
+
+<p><li><strong>Template vs Instance</strong>: Subcircuit is a template (e.g., ALU1.circom), Placement is an instance</li><br><li><strong>ID Assignment</strong>: Each placement gets a unique sequential ID (starting from 4)</li><br><li><strong>Wire Connections</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">outPts</code> from one placement become <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">inPts</code> to another</li><br><li><strong>Circuit Building</strong>: Placements form a Directed Acyclic Graph (DAG) representing the entire computation</li></ul></p>
+
+<h3>Definition</h3>
+
+<p><strong>Source</strong>: <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/types/synthesizer.ts#L71-L76"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">types/synthesizer.ts:71-76</code></a></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>export type PlacementEntry = {
+  name: SubcircuitNames;    // Type of subcircuit (e.g., &#039;ALU1&#039;, &#039;AND&#039;)
+  usage: ArithmeticOperator; // Specific operation (e.g., &#039;ADD&#039;, &#039;MUL&#039;)
+  subcircuitId: SubcircuitId; // Numeric ID from QAP Compiler
+  inPts: DataPt[];          // Input data points
+  outPts: DataPt[];         // Output data points
+};
+
+<p>export type Placements = Map&lt;number, PlacementEntry&gt;;<br></code></pre></p>
+
+<h3>Example: Placement Creation</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// When synthesizerArith(&#039;ADD&#039;, [aPt, bPt], resultValue, runState) is called:
+
+<p>// 1. Select subcircuit and create selector<br>const [subcircuitName, selectorValue] = SUBCIRCUIT_MAPPING[&#039;ADD&#039;]; // [&#039;ALU1&#039;, 2n]<br>const selectorPt = synthesizer.loadAuxin(selectorValue);</p>
+
+<p>// 2. Create output DataPt<br>const resultPt = DataPointFactory.create({<br>  source: placementId,  // ID of this placement (e.g., 4)<br>  wireIndex: 0,         // First output wire<br>  value: resultValue,   // Actual result (15n)<br>  sourceSize: 32<br>});</p>
+
+<p>// 3. Create and store placement<br>const placement: PlacementEntry = {<br>  name: &#039;ALU1&#039;,<br>  usage: &#039;ADD&#039;,<br>  subcircuitId: 4,<br>  inPts: [selectorPt, aPt, bPt],<br>  outPts: [resultPt]<br>};</p>
+
+<p>synthesizer.state.placements.set(placementId, placement);<br></code></pre></p>
+
+<h3>Placement IDs 0-3: Buffer Placements</h3>
+
+<p>Special placements act as <strong>interfaces</strong> between the external world and the circuit:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>Buffer Placements: The Bridge Between Worlds
+────────────────────────────────────────────
+
+<p>External World                 Buffer Layer                Circuit World<br>──────────────                 ────────────                ─────────────</p>
+
+<p>Calldata       ┐<br>Block info     ├──&gt; PUB_IN (ID=0)  ──&gt; Public symbols  ──┐<br>msg.sender     ┘                                          │<br>                                                          ├──&gt; Circuit<br>Storage        ┐                                          │    operations<br>Account state  ├──&gt; PRV_IN (ID=2)  ──&gt; Private symbols ──┘<br>Private data   ┘<br>                                                          ┌──&gt; Return data<br>                                                          │    Logs<br>Circuit result ──&gt; PUB_OUT (ID=1) ──&gt; Public output  ────┘</p>
+
+<p>Circuit result ──&gt; PRV_OUT (ID=3) ──&gt; Storage updates<br>                                       State changes<br></code></pre></p>
+
+<p>| ID  | Name      | Purpose                                                |<br>| --- | --------- | ------------------------------------------------------ |<br>| 0   | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PUB_IN</code>  | Public input buffer (calldata, block info, msg.sender) |<br>| 1   | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PUB_OUT</code> | Public output buffer (return data, logs)               |<br>| 2   | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PRV_IN</code>  | Private input buffer (storage, account state)          |<br>| 3   | <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PRV_OUT</code> | Private output buffer (storage updates)                |</p>
+
+<h3>Visualizing Complete Data Flow</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>External World          Synthesizer Circuit                    External World
+──────────────          ───────────────────                    ──────────────
+
+<p>calldata[0]=5     ──┐<br>block.number      ──┤──&gt; PUB_IN (ID=0) ──&gt; DataPt{5, source:0, wire:0} ──┐<br>msg.sender        ──┘                                                      │<br>                                                                           ▼<br>storage[key]=10   ──┐                                            ADD (ID=4)<br>                   ├──&gt; PRV_IN (ID=2) ──&gt; DataPt{10, source:2, wire:0} ──┤<br>account.balance   ──┘                                                      │<br>                                                                           ▼<br>                                                              DataPt{15, source:4, wire:0}<br>                                                                           │<br>returnData  &lt;───────── PUB_OUT (ID=1) &lt;───────────────────────────────────┤<br>logs        &lt;──┘                                                           │<br>                                                                           │<br>storage[key]=15 &lt;───── PRV_OUT (ID=3) &lt;────────────────────────────────────┘<br></code></pre><br></p>
+  
+  <hr style="margin-top: 60px; border: none; border-top: 1px solid #ddd;">
+  <p style="color: #7f8c8d; font-size: 0.9em;">
+    <em>이 문서는 <a href="https://YOUR-USERNAME.github.io/tokamak-zk-evm-docs">Tokamak zk-EVM Documentation</a>에서 변환되었습니다.</em>
+  </p>
+</body>
+</html>

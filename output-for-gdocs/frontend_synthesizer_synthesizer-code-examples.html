@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synthesizer-code-examples</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+    h2 { color: #34495e; margin-top: 30px; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; }
+    h3 { color: #7f8c8d; margin-top: 20px; }
+    code { font-family: 'Monaco', 'Courier New', monospace; font-size: 0.9em; }
+    pre { line-height: 1.4; }
+    a { color: #3498db; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { display: block; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px; }
+    ul { margin: 15px 0; padding-left: 30px; }
+    li { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>Synthesizer: Code Examples</h1>
+
+<p>This document provides detailed code-level examples of how Synthesizer processes different types of EVM operations.</p>
+
+<p>---</p>
+
+<h2>Overview</h2>
+
+<p>Each example demonstrates:</p>
+
+<ul><li><strong>Files involved</strong>: Which source files participate in the operation</li>
+<li><strong>Code flow</strong>: Step-by-step execution with actual code snippets</li>
+<li><strong>Key concepts</strong>: Important implementation details</li>
+
+<p>---</p>
+
+<h2>1. Arithmetic Operation (ADD)</h2>
+
+<p>This example shows how a simple ADD operation flows through the entire Synthesizer system.</p>
+
+<h3>Files Involved</h3>
+
+<p>1. <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">opcodes/functions.ts</code> - EVM handler<br>2. <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">opcodes/synthesizer/handlers.ts</code> - Synthesizer handler<br>3. <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">core/handlers/operationHandler.ts</code> - Placement creation<br>4. <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">core/synthesizer/index.ts</code> - Facade delegation<br>5. <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">core/handlers/stateManager.ts</code> - State update</p>
+
+<h3>Execution Flow</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// 1. EVM handler (opcodes/functions.ts:15-20)
+[0x01, function (runState) {
+  const [a, b] = runState.stack.popN(2);
+  const r = (a + b) % TWO_POW256;
+  runState.stack.push(r);
+}]
+
+<p>// 2. Synthesizer handler (opcodes/synthesizer/handlers.ts:45-60)<br>[0x01, async function (runState) {<br>  const [a, b] = runState.stackPt.popN(2);<br>  const r = mod(a.value + b.value, TWO_POW256);<br>  synthesizerArith(&#039;ADD&#039;, [a.value, b.value], r, runState);<br>}]</p>
+
+<p>// 3. synthesizerArith (opcodes/synthesizer/handlers.ts:15-40)<br>export const synthesizerArith = (<br>  op: ArithmeticOperator, ins: bigint[], out: bigint, runState: RunState<br>): void =&gt; {<br>  const inPts = runState.stackPt.popN(ins.length);<br>  const outPts = runState.synthesizer.placeArith(op, inPts);<br>  runState.stackPt.push(outPts[0]);<br>};</p>
+
+<p>// 4. Synthesizer.placeArith (core/synthesizer/index.ts:60)<br>public placeArith(name: ArithmeticOperator, inPts: DataPt[]): DataPt[] {<br>  return this.operationHandler.placeArith(name, inPts);<br>}</p>
+
+<p>// 5. OperationHandler.placeArith (core/handlers/operationHandler.ts:80)<br>public placeArith(name: ArithmeticOperator, inPts: DataPt[]): DataPt[] {<br>  // Map to subcircuit, create placement, return output symbol<br>}</p>
+
+<p>// 6. StateManager records placement (core/handlers/stateManager.ts:48)<br>this.state.placements.set(this.state.getNextPlacementIndex(), placement);<br></code></pre></p>
+
+<h3>Key Concepts</h3>
+
+<p><li><strong>Dual Execution</strong>: EVM and <a href="synthesizer-terminology.md#synthesizer">Synthesizer</a> handlers execute in parallel</li><br><li><strong><a href="synthesizer-terminology.md#symbol-processing">Symbol</a> Tracking</strong>: Input values become <a href="synthesizer-terminology.md#datapt-data-point">DataPt</a> symbols</li><br><li><strong><a href="synthesizer-terminology.md#subcircuit">Subcircuit</a> Mapping</strong>: ADD operation maps to ALU1 subcircuit</li><br><li><strong><a href="synthesizer-terminology.md#placement">Placement</a> Creation</strong>: Each operation creates a circuit node</li></p>
+
+<p>---</p>
+
+<h2>2. Storage Load (SLOAD)</h2>
+
+<p>This example demonstrates external data loading through buffer placements.</p>
+
+<h3>Files Involved</h3>
+
+<p>1. <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">opcodes/functions.ts:54</code> - SLOAD EVM handler<br>2. <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">core/handlers/dataLoader.ts</code> - loadStorage method<br>3. <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">core/handlers/bufferManager.ts</code> - addWireToInBuffer</p>
+
+<h3>Execution Flow</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// 1. SLOAD handler (opcodes/functions.ts:54)
+async function (runState) {
+  const key = runState.stack.pop();
+  const value = await runState.stateManager.getStorage(...);
+  runState.stack.push(value);
+
+<p>  // Synthesizer part<br>  runState.stackPt.push(<br>    runState.synthesizer.loadStorage(<br>      runState.env.address.toString(),<br>      key,<br>      value<br>    )<br>  );<br>}</p>
+
+<p>// 2. DataLoader.loadStorage (core/handlers/dataLoader.ts:45)<br>public loadStorage(codeAddress: string, key: bigint, value: bigint): DataPt {<br>  // Check cache<br>  if (this.state.storagePt.has(keyString)) {<br>    return this.state.storagePt.get(keyString)!;<br>  }</p>
+
+<p>  // Load from PRV_IN buffer<br>  const inPt = DataPointFactory.create({ value, ... });<br>  const outPt = this.provider.addWireToInBuffer(inPt, PRV_IN_PLACEMENT_INDEX);</p>
+
+<p>  // Cache<br>  this.state.storagePt.set(keyString, outPt);<br>  return outPt;<br>}</p>
+
+<p>// 3. BufferManager.addWireToInBuffer (core/handlers/bufferManager.ts:30)<br>public addWireToInBuffer(inPt: DataPt, placementId: number): DataPt {<br>  // Create symbol from external value<br>  const outPt = DataPointFactory.create({<br>    source: placementId,<br>    wireIndex: nextIndex,<br>    value: inPt.value,<br>  });</p>
+
+<p>  // Record in buffer placement<br>  this.state.placements.get(placementId)!.inPts.push(inPt);<br>  this.state.placements.get(placementId)!.outPts.push(outPt);</p>
+
+<p>  return outPt;<br>}<br></code></pre></p>
+
+<h3>Key Concepts</h3>
+
+<p><li><strong><a href="synthesizer-terminology.md#buffer-placements">Buffer Placement</a></strong>: <a href="synthesizer-terminology.md#prv-in-and-prv-out">PRV_IN</a> buffer (<a href="synthesizer-terminology.md#placement">Placement</a> 2) converts external values to <a href="synthesizer-terminology.md#symbol-processing">symbols</a></li><br><li><strong>Caching</strong>: Warm storage accesses reuse existing symbols</li><br><li><strong>Symbol Creation</strong>: External values become circuit-compatible <a href="synthesizer-terminology.md#datapt-data-point">DataPt</a> symbols</li></p>
+
+<p>---</p>
+
+<h2>3. Memory Load with Aliasing (MLOAD)</h2>
+
+<p>This example shows how Synthesizer handles overlapping memory writes.</p>
+
+<h3>Files Involved</h3>
+
+<p>1. <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">opcodes/functions.ts:51</code> - MLOAD EVM handler<br>2. <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">pointers/memoryPt.ts</code> - getDataAlias method<br>3. <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">core/handlers/memoryManager.ts</code> - placeMemoryToStack</p>
+
+<h3>Execution Flow</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// 1. MLOAD handler
+function (runState) {
+  const pos = runState.stack.pop();
+  const word = runState.memory.read(Number(pos), 32);
+  runState.stack.push(bytesToBigInt(word));
+
+<p>  // Synthesizer part<br>  const posPt = runState.stackPt.pop();<br>  const dataAliasInfos = runState.memoryPt.getDataAlias(posPt.value, 32);<br>  const reconstructedPt = runState.synthesizer.placeMemoryToStack(dataAliasInfos);<br>  runState.stackPt.push(reconstructedPt);<br>}</p>
+
+<p>// 2. MemoryPt.getDataAlias<br>public getDataAlias(offset: bigint, size: number): DataAliasInfos {<br>  // Find all overlapping memory writes<br>  const overlaps = this._viewMemoryConflict(offset, size);</p>
+
+<p>  // For each overlap, calculate shift and mask<br>  return overlaps.map(entry =&gt; ({<br>    dataPt: entry.dataPt,<br>    shift: calculateShift(...),<br>    masker: generateMasker(...)<br>  }));<br>}</p>
+
+<p>// 3. MemoryManager.placeMemoryToStack<br>public placeMemoryToStack(dataAliasInfos: DataAliasInfos): DataPt {<br>  // Generate reconstruction circuit<br>  // Uses SHR, AND, SHL, OR subcircuits<br>  // Returns final reconstructed symbol<br>}<br></code></pre></p>
+
+<h3>Key Concepts</h3>
+
+<p><li><strong><a href="synthesizer-terminology.md#data-aliasing">Memory Aliasing</a></strong>: Tracks overlapping memory writes over time</li><br><li><strong>Circuit Reconstruction</strong>: Generates SHR, SHL, AND, OR <a href="synthesizer-terminology.md#placement">placements</a> to combine fragments</li><br><li><strong>2D Memory Model</strong>: <a href="synthesizer-terminology.md#memorypt">MemoryPt</a> uses (offset × time) to track all writes</li></ul></p>
+
+<h3>Example Scenario</h3>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>Step 1: MSTORE 0x10, value_x  (writes 32 bytes at 0x10-0x30)
+Step 2: MSTORE 0x00, value_y  (writes 32 bytes at 0x00-0x20, overlaps!)
+Step 3: MLOAD 0x10              (needs bytes 0x10-0x30)
+
+<p>Result: Bytes 0x10-0x20 come from value_y, bytes 0x20-0x30 from value_x<br>        Synthesizer generates circuit to reconstruct this relationship<br></code></pre><br></p>
+  
+  <hr style="margin-top: 60px; border: none; border-top: 1px solid #ddd;">
+  <p style="color: #7f8c8d; font-size: 0.9em;">
+    <em>이 문서는 <a href="https://YOUR-USERNAME.github.io/tokamak-zk-evm-docs">Tokamak zk-EVM Documentation</a>에서 변환되었습니다.</em>
+  </p>
+</body>
+</html>
