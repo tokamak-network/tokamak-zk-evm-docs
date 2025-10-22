@@ -554,3 +554,14 @@ html {
     padding-right: 100px !important;
   }
 }
+
+/* Hide right TOC below 800px regardless of left menu state */
+@media (max-width: 799px) {
+  .page-toc-enabled .page-toc {
+    display: none !important;
+  }
+
+  .page-toc-enabled .book .book-body {
+    padding-right: 0 !important;
+  }
+}

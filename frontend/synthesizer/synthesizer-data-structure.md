@@ -4,7 +4,7 @@ This document explains the core data structures used in the Tokamak [Synthesizer
 
 ---
 
-## Contents
+## On This Page
 
 - [Overview](#overview)
 - [DataPt (Data Point)](#datapt-data-point)

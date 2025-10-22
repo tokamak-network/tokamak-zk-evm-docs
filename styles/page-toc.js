@@ -25,7 +25,20 @@
 // Right sidebar Table of Contents for terminology pages
 (function () {
   function initTOC() {
-    // Find Table of Contents heading
+    // Always clean up first
+    var existingTOC = document.querySelector(".page-toc");
+    if (existingTOC) {
+      existingTOC.remove();
+    }
+    document.body.classList.remove("page-toc-enabled");
+
+    // Check if we're on terminology page - EARLY EXIT
+    var currentPath = window.location.pathname;
+    if (!currentPath.includes("synthesizer-terminology")) {
+      return; // Exit immediately for non-terminology pages
+    }
+
+    // Find Table of Contents heading (only on terminology page)
     var headings = document.querySelectorAll(".markdown-section h2");
     var tocHeading = null;
     var tocList = null;
@@ -55,14 +68,18 @@
       var clonedList = tocList.cloneNode(true);
       sidebar.appendChild(clonedList);
 
-      // Remove the inline TOC
-      tocHeading.remove();
-      tocList.remove();
+      // Remove the inline TOC (only on terminology page)
+      if (tocHeading && tocHeading.parentNode) {
+        tocHeading.remove();
+      }
+      if (tocList && tocList.parentNode) {
+        tocList.remove();
+      }
 
-      // Remove the hr after TOC if exists
-      var hrs = document.querySelectorAll(".markdown-section hr");
-      if (hrs.length > 0) {
-        hrs[0].remove();
+      // Remove the hr after TOC if exists (only first hr on terminology page)
+      var firstHr = document.querySelector(".markdown-section hr");
+      if (firstHr && firstHr.parentNode) {
+        firstHr.remove();
       }
 
       // Append to book
