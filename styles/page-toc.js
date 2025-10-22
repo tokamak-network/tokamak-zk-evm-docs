@@ -1,3 +1,5 @@
+console.log("page-toc.js loaded!");
+
 // Hide Sepia theme option
 (function () {
   function hideSepia() {
@@ -24,6 +26,9 @@
 
 // Right sidebar Table of Contents for terminology pages
 (function () {
+  console.log("TOC script initialized");
+  var savedHash = null; // Store hash before page change
+
   function initTOC() {
     // Always clean up first
     var existingTOC = document.querySelector(".page-toc");
@@ -37,6 +42,18 @@
     if (!currentPath.includes("synthesizer-terminology")) {
       return; // Exit immediately for non-terminology pages
     }
+
+    // Restore hash if it was saved
+    var hashToUse = savedHash || window.location.hash;
+    console.log("initTOC: hashToUse =", hashToUse, "savedHash was:", savedHash);
+
+    // If we have a saved hash, restore it to the URL immediately
+    if (savedHash && !window.location.hash) {
+      console.log("Restoring hash to URL:", savedHash);
+      window.location.hash = savedHash;
+    }
+
+    savedHash = null; // Clear after use
 
     // Find Table of Contents heading (only on terminology page)
     var headings = document.querySelectorAll(".markdown-section h2");
@@ -68,7 +85,13 @@
       var clonedList = tocList.cloneNode(true);
       sidebar.appendChild(clonedList);
 
-      // Remove the inline TOC (only on terminology page)
+      // Append sidebar first
+      var book = document.querySelector(".book");
+      if (book) {
+        book.appendChild(sidebar);
+      }
+
+      // Remove the inline TOC immediately (browser will handle anchor scroll)
       if (tocHeading && tocHeading.parentNode) {
         tocHeading.remove();
       }
@@ -80,12 +103,6 @@
       var firstHr = document.querySelector(".markdown-section hr");
       if (firstHr && firstHr.parentNode) {
         firstHr.remove();
-      }
-
-      // Append to book
-      var book = document.querySelector(".book");
-      if (book) {
-        book.appendChild(sidebar);
       }
 
       // Highlight current section on scroll
@@ -121,10 +138,39 @@
     initTOC();
   }
 
+  // Capture clicks on links with hash
+  document.body.addEventListener(
+    "click",
+    function (e) {
+      var target = e.target;
+      // Find the closest anchor tag
+      while (target && target.tagName !== "A") {
+        target = target.parentElement;
+      }
+      if (
+        target &&
+        target.hash &&
+        target.pathname.includes("synthesizer-terminology")
+      ) {
+        savedHash = target.hash;
+        console.log("✓ Saved hash:", savedHash, "from link:", target.href);
+      }
+    },
+    true
+  );
+
   // Also run on gitbook page change
   if (typeof gitbook !== "undefined") {
-    gitbook.events.bind("page.change", function () {
-      setTimeout(initTOC, 100);
+    gitbook.events.bind("page.change", function (e) {
+      console.log(
+        "Page change event, savedHash before:",
+        savedHash,
+        "window.location.hash:",
+        window.location.hash
+      );
+
+      // Run immediately to avoid interfering with HonKit's anchor handling
+      initTOC();
     });
   }
 })();
