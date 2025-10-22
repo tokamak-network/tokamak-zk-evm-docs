@@ -1,5 +1,3 @@
-console.log("page-toc.js loaded!");
-
 // Hide Sepia theme option
 (function () {
   function hideSepia() {
@@ -26,7 +24,6 @@ console.log("page-toc.js loaded!");
 
 // Right sidebar Table of Contents for terminology pages
 (function () {
-  console.log("TOC script initialized");
   var savedHash = null; // Store hash before page change
 
   function initTOC() {
@@ -44,15 +41,9 @@ console.log("page-toc.js loaded!");
     }
 
     // Restore hash if it was saved
-    var hashToUse = savedHash || window.location.hash;
-    console.log("initTOC: hashToUse =", hashToUse, "savedHash was:", savedHash);
-
-    // If we have a saved hash, restore it to the URL immediately
     if (savedHash && !window.location.hash) {
-      console.log("Restoring hash to URL:", savedHash);
       window.location.hash = savedHash;
     }
-
     savedHash = null; // Clear after use
 
     // Find Table of Contents heading (only on terminology page)
@@ -153,7 +144,6 @@ console.log("page-toc.js loaded!");
         target.pathname.includes("synthesizer-terminology")
       ) {
         savedHash = target.hash;
-        console.log("✓ Saved hash:", savedHash, "from link:", target.href);
       }
     },
     true
@@ -161,15 +151,7 @@ console.log("page-toc.js loaded!");
 
   // Also run on gitbook page change
   if (typeof gitbook !== "undefined") {
-    gitbook.events.bind("page.change", function (e) {
-      console.log(
-        "Page change event, savedHash before:",
-        savedHash,
-        "window.location.hash:",
-        window.location.hash
-      );
-
-      // Run immediately to avoid interfering with HonKit's anchor handling
+    gitbook.events.bind("page.change", function () {
       initTOC();
     });
   }
