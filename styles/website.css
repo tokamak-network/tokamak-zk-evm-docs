@@ -529,8 +529,8 @@ html {
   display: none !important;
 }
 
-/* When left menu is open: hide TOC below 1100px */
-@media (max-width: 1099px) {
+/* When left menu is open: hide TOC below 1630px */
+@media (max-width: 1629px) {
   body.page-toc-enabled .book.with-summary .book-body {
     padding-right: 0 !important;
   }
@@ -540,13 +540,17 @@ html {
   }
 }
 
-/* When left menu is closed: hide TOC below 800px */
-@media (max-width: 799px) {
-  body.page-toc-enabled .book .book-body {
-    padding-right: 0 !important;
+/* When left menu is closed: extend compact layout to 1320px */
+@media (min-width: 1240px) and (max-width: 1319px) {
+  .book:not(.with-summary) .book-body {
+    padding-left: 0 !important;
+    margin-left: 0 !important;
   }
+}
 
-  body.page-toc-enabled .page-toc {
-    display: none !important;
+/* When left menu is closed: extend compact layout to 1320px */
+@media (min-width: 1240px) and (max-width: 1319px) {
+  .page-inner {
+    padding-right: 100px !important;
   }
 }

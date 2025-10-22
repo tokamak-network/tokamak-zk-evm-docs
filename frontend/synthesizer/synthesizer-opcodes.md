@@ -4,7 +4,7 @@ This document describes how the Tokamak [Synthesizer](synthesizer-terminology.md
 
 ---
 
-## Table of Contents
+## Contents
 
 - [Overview](#overview)
 - [All Opcodes](#all-opcodes)
