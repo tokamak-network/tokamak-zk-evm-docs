@@ -29,12 +29,12 @@ This document describes how the Tokamak [Synthesizer](synthesizer-terminology.md
 
 ### Key Differences
 
-| Aspect           | Standard EVM               | Synthesizer                                                                       |
-| ---------------- | -------------------------- | --------------------------------------------------------------------------------- |
-| **Processing**   | Value-based computation    | [Symbol-based](synthesizer-terminology.md#symbol-processing) circuit generation   |
-| **Traceability** | Black box (input → output) | Transparent (input → [placements](synthesizer-terminology.md#placement) → output) |
-| **Output**       | Final computation result   | Circuit representation + result                                                   |
-| **Purpose**      | Execute transaction        | Generate zk-SNARK proof                                                           |
+| Aspect           | Standard EVM               | Synthesizer                               |
+| ---------------- | -------------------------- | ----------------------------------------- |
+| **Processing**   | Value-based computation    | Symbol-based circuit generation           |
+| **Traceability** | Black box (input → output) | Transparent (input → placements → output) |
+| **Output**       | Final computation result   | Circuit representation + result           |
+| **Purpose**      | Execute transaction        | Generate zk-SNARK proof                   |
 
 ### Subcircuit Types
 
@@ -1300,8 +1300,3 @@ The Tokamak zk-EVM is designed specifically for Layer 2 state channel applicatio
 | `0x1d` | SAR        | ALU3          | `1 << 29` | 816         | 638        | 178    |
 
 _Source: [`packages/frontend/qap-compiler/subcircuits/library/info/`](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler/subcircuits/library/info) - Compiled subcircuit constraint information from Circom circuits_
-
----
-
-**Last Updated**: October 2025  
-**Maintained by**: [Tokamak Network](https://www.tokamak.network/)
