@@ -524,10 +524,7 @@ html {
   background: rgba(0, 0, 0, 0.3);
 }
 
-/* Hide the inline TOC when right sidebar is enabled */
-.page-toc-enabled .markdown-section > h2:first-of-type + ul {
-  display: none !important;
-}
+/* This CSS rule has been removed to prevent hiding "On This Page" content on other pages */
 
 /* When left menu is open: hide TOC below 1630px */
 @media (max-width: 1629px) {
