@@ -39,3 +39,9 @@ Understand DataPt, StackPt, MemoryPt, and Placement - the key data structures fo
 **Reference guide for EVM opcode implementation**
 
 Detailed opcode-by-opcode reference with circuit generation details and source code links.
+
+### 6. [Terminology](synthesizer/synthesizer-terminology.md)
+
+**Quick reference for Synthesizer-specific terms**
+
+Alphabetically organized glossary of key concepts, data structures, and technical terms used throughout the Synthesizer documentation.
