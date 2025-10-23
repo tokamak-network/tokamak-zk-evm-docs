@@ -353,9 +353,13 @@ When the EVM produces outputs, Synthesizer:
 
 ---
 
-### Step 5: Memory Aliasing Resolution
+### Step 5: Data Aliasing Resolution
 
-One of Synthesizer's most complex tasks is tracking overlapping memory writes:
+One of Synthesizer's most complex tasks is resolving **data aliasing**—when the same memory region is referenced in different ways. This occurs in three main scenarios:
+
+#### Scenario 1: Overlapping Memory Writes
+
+When multiple writes affect the same memory location:
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -405,18 +409,211 @@ One of Synthesizer's most complex tasks is tracking overlapping memory writes:
 └────────────────────────────────────────────────────────┘
 ```
 
-**What happens here:**
+#### Scenario 2: Offset Mismatch (No Overlapping)
+
+Even without overlapping writes, offset differences require aliasing resolution:
+
+```
+MSTORE(0x03, X)  // Stores 32 bytes at 0x03-0x23
+MLOAD(0x00)      // Loads 32 bytes from 0x00-0x20
+
+Memory Layout:
+0x00 0x01 0x02 [0x03 ... 0x1F] 0x20 0x21 0x22 0x23
+[??  ??  ??] [    X (32 bytes)    ] [??  ??  ??]
+[        Y (32 bytes)         ]
+
+Result Y = [3 garbage bytes] + [first 29 bytes of X]
+```
+
+The loaded value Y is **not** the same as X, even though there's no overlapping. Synthesizer must:
+
+1. Detect the 3-byte offset difference
+2. Extract the relevant portion of X
+3. Combine with uninitialized memory (garbage bytes)
+4. Generate circuits to prove the reconstruction
+
+#### Scenario 3: Calldata Chunking (Reverse Process)
+
+When calldata exceeds 32 bytes, it must be chunked into multiple DataPts:
+
+```solidity
+// Solidity function
+function transfer(address to, uint256 amount) {
+    // Calldata: 68 bytes total
+    // 0x00-0x04: function selector (4 bytes)
+    // 0x04-0x24: to address (32 bytes)
+    // 0x24-0x44: amount (32 bytes)
+}
+
+// Problem: DataPt can only handle 32 bytes!
+```
+
+**Current Implementation (Alpha)**:
+
+The current Synthesizer uses EVM's chunked result as an oracle without proving the chunking process:
+
+```typescript
+// See: instructionHandlers.ts:606
+case 'CALLDATALOAD': {
+  // Uses EVM result directly (oracle approach)
+  dataPt = runState.synthesizer.loadEnvInf(
+    runState.env.address.toString(),
+    'Calldata(User)',
+    runState.stack.peek(1)[0],  // EVM's computed value
+    i,
+  );
+}
+```
+
+**Limitation**: This approach doesn't prove how calldata was chunked, making it an incomplete zk-proof.
+
+**Next Version (Beta - In Development)**:
+
+The upcoming version will create a dedicated CallData MemoryPt to store function selector and arguments as separate DataPts, enabling complete proof of the chunking process:
+
+```typescript
+// Beta approach (in development)
+calldataMemoryPt.write(0x00, 4, functionSelectorPt);   // Provable!
+calldataMemoryPt.write(0x04, 32, addressPt);           // Provable!
+calldataMemoryPt.write(0x24, 32, amountPt);            // Provable!
+
+// CALLDATALOAD(0x04) → calldataMemoryPt.getDataAlias(0x04, 32) → addressPt
+```
+
+**Reference**: [CALLDATALOAD implementation](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/eb0073488d5db6ca5219fc911b676869267c521f/packages/frontend/synthesizer/src/tokamak/core/synthesizer/handlers/instructionHandlers.ts#L606)
+
+#### Scenario 4: Multi-Chunk Memory Operations
+
+When operations like **KECCAK256** or **LOG** need to read more than 32 bytes, the memory is chunked into multiple 32-byte segments, each requiring separate aliasing resolution:
+
+```
+KECCAK256(offset=0x00, length=0x50)  // Hash 80 bytes
+
+Chunking process:
+Chunk 1: getDataAlias(0x00, 32) → DataPt A
+Chunk 2: getDataAlias(0x20, 32) → DataPt B
+Chunk 3: getDataAlias(0x40, 16) → DataPt C (partial chunk)
+
+Each chunk independently resolves aliasing!
+```
+
+**Key characteristics**:
+
+- Memory divided into 32-byte chunks (last chunk may be smaller)
+- Each chunk calls `getDataAlias` independently
+- Multiple placements may be generated for a single operation
+- Used by: KECCAK256, LOG0-LOG4
+
+**Implementation**: See [chunkMemory function](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/utils/functions.ts#L8-L38)
+
+#### Scenario 5: Memory-to-Memory Copy Operations
+
+Operations like **MCOPY**, **CODECOPY**, **EXTCODECOPY**, and **RETURNDATACOPY** copy data from one memory region to another, potentially causing aliasing in both source and destination:
+
+```
+Memory before:
+0x00-0x20: DataPt X (32 bytes)
+0x20-0x40: DataPt Y (32 bytes)
+
+MCOPY(dst=0x10, src=0x00, length=0x30)
+// Copies 48 bytes from 0x00-0x30 to 0x10-0x40
+
+Result after copy:
+0x10-0x20: Partial X (offset mismatch!)
+0x20-0x30: Rest of X + partial Y (overlapping!)
+0x30-0x40: Rest of Y
+```
+
+**Key characteristics**:
+
+- Both source and destination can have aliasing issues
+- Uses `placeMemoryToMemory` instead of `placeMemoryToStack`
+- Source region aliasing must be resolved before copying
+- Destination region may overlap with source (e.g., MCOPY with overlapping regions)
+
+**Implementation**: See [copyMemoryRegion](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/pointers/memoryPt.ts#L90-L132)
+
+#### Scenario 6: External Code Copy with Chunking
+
+**EXTCODECOPY** copies external contract bytecode to memory, chunking it into manageable pieces:
+
+```typescript
+// Copying 100 bytes of external contract code
+EXTCODECOPY(address, memOffset=0x00, codeOffset=0x00, length=0x64)
+
+Chunking process:
+while (chunkedLength > 0) {
+  chunkSize = min(chunkedLength, 32);
+  dataPt = prepareEXTCodePt(address, codeOffset, chunkSize);
+  memoryPt.write(memOffset, chunkSize, dataPt);
+
+  chunkedLength -= chunkSize;
+  memOffset += chunkSize;
+  codeOffset += chunkSize;
+}
+```
+
+**Key characteristics**:
+
+- External code is fetched and chunked into 32-byte pieces
+- Each chunk is written to memory as a separate DataPt
+- Subsequent MLOAD operations may need to resolve aliasing across these chunks
+
+#### Scenario 7: Uninitialized Memory Access (Edge Case)
+
+**Note**: This is technically not "aliasing resolution" but rather a **default value handling mechanism** when no DataPts exist for the requested memory region.
+
+When **MLOAD** reads from memory that has never been written to, `getDataAlias` returns an empty array, and a zero value is loaded:
+
+```
+// No MSTORE operations performed
+MLOAD(0x00)  // Reading uninitialized memory
+
+getDataAlias(0x00, 32) returns []
+→ loadAuxin(0) is used (zero value)
+```
+
+**Key characteristics**:
+
+- `dataAliasInfos.length === 0` indicates uninitialized memory
+- Synthesizer loads auxiliary input with value 0
+- Represents "garbage" or uninitialized memory in EVM semantics
+- **No subcircuit generation** (unlike Scenarios 1-6)
+- Simple default value provision, not aliasing resolution
+
+**Why it's different from aliasing resolution**:
+
+- **Scenarios 1-6**: Multiple DataPts exist → resolve relationships → generate subcircuits
+- **Scenario 7**: No DataPts exist → provide default value → no subcircuits
+
+#### Summary: All Data Resolution Scenarios
+
+| Scenario                    | Opcodes                                      | Key Feature                                          | Type                |
+| --------------------------- | -------------------------------------------- | ---------------------------------------------------- | ------------------- |
+| **1. Overlapping Writes**   | MSTORE, MSTORE8                              | Multiple writes to same region                       | Aliasing Resolution |
+| **2. Offset Mismatch**      | MLOAD, MSTORE                                | Read/write offset misalignment                       | Aliasing Resolution |
+| **3. Calldata Chunking**    | CALLDATALOAD                                 | >32 bytes calldata (Alpha: oracle, Beta: full proof) | Aliasing Resolution |
+| **4. Multi-Chunk Read**     | KECCAK256, LOG0-LOG4                         | >32 bytes memory read                                | Aliasing Resolution |
+| **5. Memory Copy**          | MCOPY, CODECOPY, EXTCODECOPY, RETURNDATACOPY | Source/destination aliasing                          | Aliasing Resolution |
+| **6. External Code Copy**   | EXTCODECOPY                                  | External code chunking                               | Aliasing Resolution |
+| **7. Uninitialized Memory** | MLOAD                                        | Reading never-written memory                         | Edge Case           |
+
+**Common principle for Scenarios 1-6**: Aliasing resolution occurs whenever `getDataAlias` returns non-empty results, requiring reconstruction of memory values from multiple symbolic DataPts through subcircuit generation.
+
+**Edge Case (Scenario 7)**: When `getDataAlias` returns empty results, a default zero value is provided without subcircuit generation.
+
+#### How Aliasing Resolution Works
 
 Traditional EVM simply overwrites memory and returns the latest value. But Synthesizer must prove **how** that value was computed from the original symbols.
 
 The 2D structure of [MemoryPt](synthesizer-terminology.md#memorypt) (offset × time) allows Synthesizer to:
 
-1. Track all writes to each memory location
-2. Detect overlaps when reading
+1. Track all writes to each memory location with timestamps
+2. Detect overlaps and offset mismatches when reading
 3. Generate [subcircuits](synthesizer-terminology.md#subcircuit) (using SHR, SHL, AND, OR) to reconstruct the correct value
-4. Prove the reconstruction is correct
+4. Prove the reconstruction is mathematically correct
 
-This is why memory operations can generate multiple [placements](synthesizer-terminology.md#placement)—they need to prove [data aliasing](synthesizer-terminology.md#data-aliasing).
+This is why memory operations can generate multiple [placements](synthesizer-terminology.md#placement)—they need to prove [data aliasing](synthesizer-terminology.md#data-aliasing) resolution in all its forms.
 
 ---
 
