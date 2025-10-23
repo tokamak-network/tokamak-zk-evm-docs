@@ -124,7 +124,7 @@ The component responsible for converting the Synthesizer's internal state (place
 2. Generates `instance.json` by extracting buffer values and creating witness arrays
 3. Generates `placementVariables.json` by calculating witnesses for each placement using WASM
 
-**Related**: [Output Files](./synthesizer-output-files.md)
+**Related**: [Output Files](./synthesizer-output-files.md), [Class Structure](./synthesizer-class-structure.md#finalizer)
 
 ---
 

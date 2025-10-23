@@ -1,6 +1,6 @@
 # Synthesizer: Opcode Reference
 
-This document describes how the Tokamak [Synthesizer](synthesizer-terminology.md#synthesizer) handles each EVM opcode, comparing standard EVM behavior with circuit generation.
+This document describes how [Synthesizer](synthesizer-terminology.md#synthesizer) handles each EVM opcode, comparing standard EVM behavior with circuit generation.
 
 ---
 
@@ -620,7 +620,7 @@ await synthesizerArith('SHL', [a.value, b.value], result, runState);
 
 ### 0x20: KECCAK256
 
-**Constraints**: ~5000
+**Constraints**: 1028
 
 **Stack**: `offset, size` → `keccak256(memory[offset:offset+size])`
 

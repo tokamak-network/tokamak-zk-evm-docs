@@ -50,7 +50,7 @@ The following diagram shows the complete flow of a transaction through Synthesiz
 **What flows through**:
 
 - **Transaction Hash** → Fetches transaction details and triggers re-execution
-- **Subcircuit Library** → Provides circuit templates (.wasm, .ts) used during execution
+- **Subcircuit Library** → Pre-compiled by QAP-compiler; provides circuit templates (.wasm, .ts) that Synthesizer uses
 - **RPC Provider** → Supplies blockchain state (storage, balances, code) on-demand throughout execution
 
 The transaction flows through **6 main steps**, which we'll explore in detail below.
@@ -59,32 +59,29 @@ The transaction flows through **6 main steps**, which we'll explore in detail be
 
 ## Step-by-Step Transaction Processing
 
-### Step 1: Setup & Preparation
+### Step 1: Prerequisites & Setup
 
-Before processing the transaction, Synthesizer prepares its environment:
+Before Synthesizer can process a transaction, the environment must be prepared:
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│  1. Compile Subcircuit Library (One-time setup)        │
+│  1. QAP-compiler: Compile Subcircuit Library           │
+│     (Prerequisite - one-time setup)                    │
 └────────────────────────────────────────────────────────┘
          │
-         │
-         │
-         │
-         ▼
-    Generate .wasm files (subcircuit0.wasm ... subcircuitN.wasm)
-    Generate TypeScript definitions (globalWireList.ts, subcircuitInfo.ts)
+         │  Generates .wasm files (subcircuit0.wasm ... subcircuitN.wasm)
+         │  Generates TypeScript definitions (globalWireList.ts, etc.)
          │
          ▼
 ┌────────────────────────────────────────────────────────┐
-│  2. Configure RPC Provider                             │
+│  2. Synthesizer: Configure RPC Provider                │
 └────────────────────────────────────────────────────────┘
          │
          │  Set up RPC endpoint for Ethereum Mainnet
          │
          ▼
 ┌────────────────────────────────────────────────────────┐
-│  3. Provide Transaction Hash                           │
+│  3. Synthesizer: Provide Transaction Hash              │
 └────────────────────────────────────────────────────────┘
          │
          │  TX: 0x123abc...
@@ -95,18 +92,24 @@ Before processing the transaction, Synthesizer prepares its environment:
 
 **What happens here:**
 
-1. **Subcircuit Library Compilation**: Circom compiles all the fundamental circuits (ALU1, bitify, XOR, etc.) into WebAssembly files. These are the building blocks that Synthesizer will use to construct the transaction-specific circuit.
+1. **Subcircuit Library** (Prerequisite): The [QAP-compiler](synthesizer-terminology.md#qap-compiler) compiles all fundamental subcircuits using Circom:
 
-2. **RPC Connection**: Synthesizer connects to Ethereum Mainnet via RPC to access blockchain state. This connection is essential because Synthesizer needs to:
+   - I/O interface buffers (LOAD/RETURN)
+   - Arithmetic and bitwise operations (ALU1, ALU2, XOR, etc.)
+   - Cryptographic primitives (bitify, etc.)
 
-   - Fetch transaction details (from, to, data, value)
-   - Access account states at the transaction's block height
-   - Query storage values on-demand during execution
-   - Retrieve block information (number, timestamp, coinbase, etc.)
+   These are compiled into WebAssembly files (`.wasm`) that Synthesizer uses as building blocks.
 
-3. **Transaction Selection**: You provide the transaction hash of an already-executed Ethereum transaction. Synthesizer will re-execute this transaction to generate the circuit.
+   > **Note**: This is a separate component from Synthesizer. See the QAP-compiler documentation for details (page to be added).
 
-**Important**: The RPC connection remains active throughout execution, not just during initialization. When the EVM encounters `SLOAD`, `BALANCE`, `EXTCODESIZE`, etc., it queries the blockchain state through RPC in real-time.
+2. **RPC Connection** (Synthesizer): Connect to Ethereum via RPC to access blockchain state. This is essential for:
+
+   - Fetching transaction details (from, to, data, value)
+   - Accessing account states at the transaction's block height
+   - Querying storage values on-demand during execution
+   - Retrieving block information (number, timestamp, coinbase, etc.)
+
+3. **Transaction Selection** (Synthesizer): Provide the transaction hash of an already-executed Ethereum transaction. Synthesizer will re-execute it to generate the circuit.
 
 ---
 
@@ -229,7 +232,25 @@ After every opcode, Synthesizer verifies that `Stack[i].value == StackPt[i].valu
 
 ### Step 4: Symbol Loading & Returning
 
-Throughout execution, Synthesizer needs to convert between external values and internal symbols:
+**This is the heart of Synthesizer**: converting between concrete values and [symbolic representations](synthesizer-terminology.md#symbol-processing).
+
+#### Why This Conversion Is Essential
+
+**The Synthesizer's unique challenge**: Unlike traditional zk-proof systems that work with fixed circuits, Synthesizer must handle **arbitrary EVM transactions** where the computation path is unknown until runtime.
+
+Without [symbol](synthesizer-terminology.md#symbol-processing) conversion, Synthesizer cannot:
+
+1. **Track data flow through EVM opcodes**: When `SLOAD` reads storage, how does that value propagate through `ADD`, `MUL`, and eventually to `SSTORE`? Symbols create a traceable chain.
+
+2. **Distinguish transaction-level privacy**: EVM has no concept of "public" vs "private" data. Synthesizer's buffer system enables selective disclosure at the transaction level—something standard EVMs cannot do.
+
+3. **Generate circuits dynamically**: The circuit structure depends on which opcodes execute. Symbols let Synthesizer build the circuit **while** the EVM runs, not before.
+
+4. **Prove state transitions without exposing state**: Storage values must remain private, but state changes must be provable. Symbols bridge this gap by representing values mathematically.
+
+#### How Symbol Conversion Works
+
+Throughout execution, Synthesizer maintains a bidirectional bridge between two worlds:
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -274,20 +295,61 @@ Throughout execution, Synthesizer needs to convert between external values and i
 └────────────────────────────────────────────────────────┘
 ```
 
-**What happens here:**
+#### The Conversion Process
 
-Buffers act as the **interface** between the external world (Ethereum state) and the internal circuit world (symbols):
+[Buffers](synthesizer-terminology.md#buffer-placements) act as the **interface** between the external world (Ethereum state) and the internal circuit world (symbols):
 
-- **LOAD Buffer** ([Placement](synthesizer-terminology.md#placement) IDs 0, 2): Takes concrete values and produces symbols
+**LOAD Buffers** ([Placements](synthesizer-terminology.md#placement) 0, 2): **External Values → Symbols**
 
-  - Public inputs: calldata, block info, msg.sender ([PUB_IN](synthesizer-terminology.md#pub-in-and-pub-out) - Placement 0)
-  - Private inputs: storage values, account states ([PRV_IN](synthesizer-terminology.md#prv-in-and-prv-out) - Placement 2)
+When the EVM needs external data, Synthesizer:
 
-- **RETURN Buffer** (Placement IDs 1, 3): Takes symbols and produces concrete outputs
-  - Public outputs: logs, return data ([PUB_OUT](synthesizer-terminology.md#pub-in-and-pub-out) - Placement 1)
-  - Private outputs: storage updates ([PRV_OUT](synthesizer-terminology.md#prv-in-and-prv-out) - Placement 3)
+1. Fetches the concrete value (e.g., `storage[key] = 0x42`)
+2. Creates a [DataPt](synthesizer-terminology.md#datapt-data-point) symbol tracking this value
+3. Assigns it a [wire index](synthesizer-terminology.md#wire-index) in the buffer placement
+4. Returns the symbol for use in subsequent operations
 
-This is crucial for zero-knowledge proofs: public inputs/outputs are revealed, while private inputs/outputs remain hidden.
+- **[PUB_IN](synthesizer-terminology.md#pub-in-and-pub-out)** (Placement 0): Public inputs
+  - Examples: `msg.sender`, `msg.value`, calldata, block info
+  - Visible to everyone during verification
+- **[PRV_IN](synthesizer-terminology.md#prv-in-and-prv-out)** (Placement 2): Private inputs
+  - Examples: storage values, account balances, nonces
+  - Hidden from verifier, known only to prover
+
+**TRANSFORMATION** (Placements 4+): **Symbols → Transformed Symbols**
+
+After loading symbols, they flow through EVM opcodes that create transformation placements:
+
+1. Takes input symbols from previous operations (LOAD buffers or other placements)
+2. Creates a new placement representing the operation ([subcircuit](synthesizer-terminology.md#subcircuit) instance)
+3. Generates output symbols with new values and wire indices
+4. Pushes transformed symbols to [StackPt](synthesizer-terminology.md#stackpt) for subsequent operations
+
+- **Arithmetic Operations**: ADD, MUL, SUB, DIV, MOD
+  - Example: `DataPt{value: 100, source: 2}` → ADD → `DataPt{value: 110, source: 4}`
+- **Bitwise Operations**: AND, OR, XOR, SHL, SHR
+  - Example: `DataPt{value: 0xFF, source: 4}` → AND → `DataPt{value: 0x0F, source: 5}`
+- **Comparison Operations**: LT, GT, EQ, ISZERO
+  - Example: `DataPt{value: 100, source: 5}` → GT → `DataPt{value: 1, source: 6}`
+- **Memory Operations**: MLOAD, MSTORE (may create multiple placements for [data aliasing](synthesizer-terminology.md#data-aliasing))
+  - Example: Multiple symbols combined → `DataPt{value: reconstructed, source: 7}`
+
+Each transformation creates a traceable chain: `source` field points to the placement that created the symbol, enabling complete data flow tracking from LOAD to RETURN.
+
+**RETURN Buffers** (Placements 1, 3): **Symbols → External Values**
+
+When the EVM produces outputs, Synthesizer:
+
+1. Takes the final symbol (result of all transformations)
+2. Adds it to the buffer placement's input wires
+3. Records the concrete value for [witness](synthesizer-terminology.md#witness) generation
+4. Maintains the symbol-to-value mapping
+
+- **PUB_OUT** (Placement 1): Public outputs
+  - Examples: logs, return data, events
+  - Visible to everyone during verification
+- **PRV_OUT** (Placement 3): Private outputs
+  - Examples: storage updates, internal state changes
+  - Hidden from verifier, known only to prover
 
 ---
 
