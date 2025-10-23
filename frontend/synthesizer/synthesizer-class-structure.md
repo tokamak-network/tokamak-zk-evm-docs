@@ -36,6 +36,12 @@ This document provides detailed information about [Synthesizer](synthesizer-term
 │  │  - addWireToInBuffer(val, placementId)             │ │
 │  │  - addWireToOutBuffer(sym, val, placementId)       │ │
 │  └────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │  Finalizer                                          │ │
+│  │  - refactor(): optimize placements                 │ │
+│  │  - buildPermutation(): wire connections            │ │
+│  │  - outputFiles(): permutation.json, witness        │ │
+│  └────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -45,7 +51,7 @@ This document provides detailed information about [Synthesizer](synthesizer-term
 
 ### 1. Synthesizer Class
 
-**Location**: `src/tokamak/core/synthesizer/index.ts:27-181`
+**Location**: [`src/tokamak/core/synthesizer/index.ts:27-181`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/synthesizer/index.ts#L27-L181)
 
 **Role**: Central coordinator using Facade pattern
 
@@ -92,7 +98,7 @@ export class Synthesizer
 
 ### 2. StateManager Class
 
-**Location**: `src/tokamak/core/handlers/stateManager.ts:24-102`
+**Location**: [`src/tokamak/core/handlers/stateManager.ts:24-102`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/handlers/stateManager.ts#L24-L102)
 
 **Role**: Central state repository
 
@@ -135,7 +141,7 @@ export class StateManager {
 
 ### 3. OperationHandler Class
 
-**Location**: `src/tokamak/core/handlers/operationHandler.ts`
+**Location**: [`src/tokamak/core/handlers/operationHandler.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/handlers/operationHandler.ts)
 
 **Role**: Create [placements](synthesizer-terminology.md#placement) for arithmetic/logic operations
 
@@ -177,7 +183,7 @@ public placeArith(name: ArithmeticOperator, inPts: DataPt[]): DataPt[] {
 
 ### 4. DataLoader Class
 
-**Location**: `src/tokamak/core/handlers/dataLoader.ts`
+**Location**: [`src/tokamak/core/handlers/dataLoader.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/handlers/dataLoader.ts)
 
 **Role**: Handle external data (storage, environment, block info)
 
@@ -218,7 +224,7 @@ public loadStorage(codeAddress: string, key: bigint, value: bigint): DataPt {
 
 ### 5. MemoryManager Class
 
-**Location**: `src/tokamak/core/handlers/memoryManager.ts`
+**Location**: [`src/tokamak/core/handlers/memoryManager.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/handlers/memoryManager.ts)
 
 **Role**: Resolve [memory aliasing](synthesizer-terminology.md#data-aliasing)
 
@@ -238,7 +244,7 @@ public placeMemoryToStack(dataAliasInfos: DataAliasInfos): DataPt {
 
 ### 6. BufferManager Class
 
-**Location**: `src/tokamak/core/handlers/bufferManager.ts`
+**Location**: [`src/tokamak/core/handlers/bufferManager.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/handlers/bufferManager.ts)
 
 **Role**: Manage LOAD and RETURN [buffer placements](synthesizer-terminology.md#buffer-placements)
 
@@ -275,11 +281,48 @@ public addWireToOutBuffer(inPt: DataPt, outPt: DataPt, placementId: number): voi
 
 ### 7. Finalizer Class
 
-**Location**: `src/tokamak/core/finalizer/index.ts:5-26`
+**Location**: [`src/tokamak/core/finalizer/index.ts:5-26`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/finalizer/index.ts#L5-L26)
 
-**Role**: Generate output files
+**Role**: Transform symbolic execution results into concrete circuit files for the backend prover
 
-**Execution Flow**:
+#### Key Points
+
+- **Post-execution processor**: Runs after transaction execution completes
+- **Circuit optimization**: Refactors [placements](synthesizer-terminology.md#placement) to minimize [wire](synthesizer-terminology.md#wire) connections
+- **Format conversion**: Converts symbolic data ([StackPt](synthesizer-terminology.md#stackpt), [MemoryPt](synthesizer-terminology.md#memorypt)) into numerical constraints
+- **Backend interface**: Produces JSON files that the Rust backend can consume
+- **Two-phase output**: Generates both circuit structure ([permutation](synthesizer-terminology.md#permutation)) and input data ([witness](synthesizer-terminology.md#witness))
+
+#### Purpose and Problem Solved
+
+The Finalizer bridges the gap between **symbolic execution** and **concrete circuit generation**:
+
+**Problem 1: Symbolic → Concrete Conversion**
+
+- During execution, the Synthesizer works with symbolic pointers (e.g., `StackPt`, `MemoryPt`)
+- The backend prover needs concrete numerical wire connections
+- **Solution**: Finalizer converts all symbolic references into actual [wire indices](synthesizer-terminology.md#wire-index) and constraint equations
+
+**Problem 2: Circuit Optimization**
+
+- Raw placement data from execution can be inefficient (redundant wires, unused connections)
+- Large circuits slow down proving time
+- EVM uses 256-bit values but Circom's finite field is 254-bit (field overflow risk)
+- **Solution**: `PlacementRefactor` optimizes wire sizes, removes unnecessary connections, and splits 256-bit values into two 128-bit [limbs](synthesizer-terminology.md#limb) for field compatibility
+
+**Problem 3: Backend Integration**
+
+- Frontend and backend use different data structures
+- Backend needs standardized JSON format for circuit loading
+- **Solution**: `Permutation` class generates JSON files that match backend's expected schema
+
+**Problem 4: Witness Data Management**
+
+- Circuit needs both structure (permutation) and concrete values (witness)
+- Witness data must align with circuit wire indices
+- **Solution**: Generates `permutation.json` (structure) and placement-specific witness files
+
+#### Execution Flow
 
 ```typescript
 export class Finalizer {
@@ -308,3 +351,116 @@ export class Finalizer {
   }
 }
 ```
+
+#### Three-Step Process in Detail
+
+**Step 1: Placement Refactoring**
+
+```typescript
+const placementRefactor = new PlacementRefactor(this.state);
+const refactoriedPlacements = placementRefactor.refactor();
+```
+
+This step performs three critical optimizations:
+
+1. **Remove Unused Wires**
+
+   - Identifies wires that were created but never used by any placement
+   - Example: If LOAD [buffer](synthesizer-terminology.md#buffer-placements) creates 10 wires but only 7 are referenced → remove 3 unused wires
+
+2. **Split 256-bit Values into 128-bit Limbs** (Field Compatibility)
+
+   - **Problem**: Circom uses a 254-bit finite field, but Ethereum uses 256-bit values
+   - **Solution**: Split each 256-bit value into two 128-bit limbs (lower + upper)
+   - **Implementation** ([`placementRefactor.ts:53-82`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/finalizer/placementRefactor.ts#L53-L82)):
+
+     ```typescript
+     private halveWordSizeOfWires(newDataPts: DataPt[], origDataPt: DataPt): number[] {
+       const newIndex = newDataPts.length;
+       const indLow = newIndex;
+       const indHigh = indLow + 1;
+
+       if (origDataPt.sourceSize > 16) {  // If > 128 bits (16 bytes)
+         // Create two DataPt entries for lower and upper limbs
+         newDataPts[indLow] = { ...origDataPt };
+         newDataPts[indLow].wireIndex = indLow;
+         newDataPts[indHigh] = { ...origDataPt };
+         newDataPts[indHigh].wireIndex = indHigh;
+
+         // Split the 256-bit value
+         newDataPts[indHigh].value = origDataPt.value >> 128n;        // Upper 128 bits
+         newDataPts[indLow].value = origDataPt.value & (2n ** 128n - 1n); // Lower 128 bits
+
+         // Convert to hex (16 bytes each)
+         newDataPts[indHigh].valueHex = bytesToHex(
+           setLengthLeft(bigIntToBytes(newDataPts[indHigh].value), 16)
+         );
+         newDataPts[indLow].valueHex = bytesToHex(
+           setLengthLeft(bigIntToBytes(newDataPts[indLow].value), 16)
+         );
+
+         return [indLow, indHigh];  // Return both wire indices
+       } else {
+         // Values ≤ 128 bits don't need splitting
+         newDataPts[newIndex] = { ...origDataPt };
+         newDataPts[newIndex].wireIndex = newIndex;
+         return [newIndex];
+       }
+     }
+     ```
+
+   - **Example**:
+
+     ```typescript
+     // Input: 256-bit value
+     origDataPt = {
+       value: 0x123456789ABCDEF0FEDCBA9876543210123456789ABCDEF0FEDCBA9876543210n,
+       sourceSize: 32,  // 256 bits
+       wireIndex: 5
+     }
+
+     // Output: Two 128-bit limbs
+     newDataPts[10] = {
+       value: 0xFEDCBA9876543210n,  // Lower 128 bits
+       valueHex: "0xFEDCBA9876543210",
+       wireIndex: 10
+     }
+     newDataPts[11] = {
+       value: 0x123456789ABCDEF0n,  // Upper 128 bits
+       valueHex: "0x123456789ABCDEF0",
+       wireIndex: 11
+     }
+     // Returns: [10, 11]
+     ```
+
+   - Each original wire becomes two wires: `[wireIndex_low, wireIndex_high]`
+   - Backend circuits operate on 128-bit limbs to stay within field bounds
+
+3. **Update Wire Connections**
+   - Remaps all wire references to reflect the new split structure
+   - Example: Placement A's output `wire[5]` → `[wire[10], wire[11]]`
+   - All placements that referenced `wire[5]` now reference `[wire[10], wire[11]]`
+
+**Step 2: Permutation & Witness Generation**
+
+```typescript
+const permutation = new Permutation(refactoriedPlacements, _path);
+permutation.placementVariables = await permutation.outputPlacementVariables(
+  refactoriedPlacements,
+  _path,
+);
+```
+
+- Creates wire permutation map (how [subcircuits](synthesizer-terminology.md#subcircuit) connect)
+- Generates witness data (concrete values for each wire)
+
+**Step 3: Output Final Files**
+
+```typescript
+permutation.outputPermutation(_path);
+```
+
+- Writes `permutation.json` with complete circuit structure
+- Contains: placement list, wire connections, input/output mappings
+
+> **Output Files**: For detailed information about the generated files and their structure, see [Output Files](synthesizer-output-files.md).

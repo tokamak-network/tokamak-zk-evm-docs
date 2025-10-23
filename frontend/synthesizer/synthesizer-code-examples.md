@@ -1,5 +1,7 @@
 # Synthesizer: Code Examples
 
+<>
+
 This document provides detailed code-level examples of how Synthesizer processes different types of EVM operations.
 
 ---
