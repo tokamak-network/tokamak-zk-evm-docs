@@ -856,7 +856,7 @@ stackPt.pop(); // Remove top DataPt from symbol stack
 
 ### 0x51: MLOAD
 
-**Constraints**: ~5000
+**Constraints**: 1028
 
 **Stack**: `offset` → `memory[offset:offset+32]`
 
@@ -882,7 +882,7 @@ if (dataAliasInfos.length > 0) {
 
 - **Type**: Memory Operation with data aliasing resolution
 - **Subcircuits**: DecToBit, Accumulator, Bitwise (AND, OR)
-- **Constraints**: ~5,000 per overlapping DataPt
+- **Constraints**: ~1028 per overlapping DataPt
 
 #### Data Aliasing Example
 
@@ -910,7 +910,7 @@ result = (dataPt1 & mask1) | ((dataPt2 & mask2) << 128)
 
 ### 0x52: MSTORE
 
-**Constraints**: ~5000
+**Constraints**: 1028
 
 **Stack**: `offset, value` → `-` (writes 32 bytes to memory)
 
@@ -1195,7 +1195,7 @@ if (lengthPt.value !== BIGINT_0) {
   1. Load return data from MemoryPt (with aliasing resolution)
   2. Generate circuits to reconstruct data
   3. Write symbols to PUB_OUT buffer
-- **Constraints**: ~5,000 per memory segment
+- **Constraints**: 1028 per memory segment
 
 **Source**:
 

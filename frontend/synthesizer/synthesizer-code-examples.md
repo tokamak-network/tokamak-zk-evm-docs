@@ -1,7 +1,5 @@
 # Synthesizer: Code Examples
 
-<>
-
 This document provides detailed code-level examples of how Synthesizer processes different types of EVM operations.
 
 ---
@@ -20,13 +18,15 @@ Each example demonstrates:
 
 This example shows how a simple ADD operation flows through the entire Synthesizer system.
 
+![Signal processing for arithmetic operations](../../.gitbook/assets/Frame 32991.png)
+
 ### Files Involved
 
-1. `opcodes/functions.ts` - EVM handler
-2. `opcodes/synthesizer/handlers.ts` - Synthesizer handler
-3. `core/handlers/operationHandler.ts` - Placement creation
-4. `core/synthesizer/index.ts` - Facade delegation
-5. `core/handlers/stateManager.ts` - State update
+1. [`opcodes/functions.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L28-L33) - EVM handler
+2. [`opcodes/synthesizer/handlers.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L17-L26) - Synthesizer handler
+3. [`core/handlers/operationHandler.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/handlers/operationHandler.ts) - Placement creation
+4. [`core/synthesizer/index.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/synthesizer/index.ts) - Facade delegation
+5. [`core/handlers/stateManager.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/handlers/stateManager.ts) - State update
 
 ### Execution Flow
 
@@ -81,11 +81,15 @@ this.state.placements.set(this.state.getNextPlacementIndex(), placement);
 
 This example demonstrates external data loading through buffer placements.
 
+<figure><img src="../../.gitbook/assets/Frame 32977 (2).png" alt=""><figcaption><p>SLOAD: Storage value → LOAD buffer → Symbol → StackPt</p></figcaption></figure>
+
+<figure><img src="../../.gitbook/assets/Frame 32990 (1).png" alt=""><figcaption><p>SSTORE: StackPt symbol → RETURN buffer → Storage value</p></figcaption></figure>
+
 ### Files Involved
 
-1. `opcodes/functions.ts:54` - SLOAD EVM handler
-2. `core/handlers/dataLoader.ts` - loadStorage method
-3. `core/handlers/bufferManager.ts` - addWireToInBuffer
+1. [`opcodes/functions.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L1414-L1438) - SLOAD EVM handler
+2. [`core/handlers/dataLoader.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/handlers/dataLoader.ts#L86-L118) - loadStorage method
+3. [`core/handlers/bufferManager.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/handlers/bufferManager.ts) - addWireToInBuffer
 
 ### Execution Flow
 
@@ -151,11 +155,17 @@ public addWireToInBuffer(inPt: DataPt, placementId: number): DataPt {
 
 This example shows how Synthesizer handles overlapping memory writes.
 
+<figure><img src="../../.gitbook/assets/Frame 33129 (3).png" alt=""><figcaption><p>Data aliasing in memory: overlapping writes lose information in traditional EVM</p></figcaption></figure>
+
+<figure><img src="../../.gitbook/assets/Frame 33130 (3).png" alt=""><figcaption><p>MemoryPt tracks both space and time to resolve aliasing</p></figcaption></figure>
+
+<figure><img src="../../.gitbook/assets/Frame 10206 (2).png" alt=""><figcaption><p>MLOAD reproduces aliasing using SHR, SHL, AND, OR subcircuits</p></figcaption></figure>
+
 ### Files Involved
 
-1. `opcodes/functions.ts:51` - MLOAD EVM handler
-2. `pointers/memoryPt.ts` - getDataAlias method
-3. `core/handlers/memoryManager.ts` - placeMemoryToStack
+1. [`opcodes/functions.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L1277-L1286) - MLOAD EVM handler
+2. [`pointers/memoryPt.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/pointers/memoryPt.ts#L266-L284) - getDataAlias method
+3. [`core/handlers/memoryManager.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/handlers/memoryManager.ts) - placeMemoryToStack
 
 ### Execution Flow
 
@@ -199,14 +209,3 @@ public placeMemoryToStack(dataAliasInfos: DataAliasInfos): DataPt {
 - **[Memory Aliasing](synthesizer-terminology.md#data-aliasing)**: Tracks overlapping memory writes over time
 - **Circuit Reconstruction**: Generates SHR, SHL, AND, OR [placements](synthesizer-terminology.md#placement) to combine fragments
 - **2D Memory Model**: [MemoryPt](synthesizer-terminology.md#memorypt) uses (offset × time) to track all writes
-
-### Example Scenario
-
-```
-Step 1: MSTORE 0x10, value_x  (writes 32 bytes at 0x10-0x30)
-Step 2: MSTORE 0x00, value_y  (writes 32 bytes at 0x00-0x20, overlaps!)
-Step 3: MLOAD 0x10              (needs bytes 0x10-0x30)
-
-Result: Bytes 0x10-0x20 come from value_y, bytes 0x20-0x30 from value_x
-        Synthesizer generates circuit to reconstruct this relationship
-```

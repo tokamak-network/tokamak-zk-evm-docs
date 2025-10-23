@@ -436,7 +436,7 @@ The loaded value Y is **not** the same as X, even though there's no overlapping.
 
 When calldata exceeds 32 bytes, it must be chunked into multiple DataPts:
 
-```solidity
+```javascript
 // Solidity function
 function transfer(address to, uint256 amount) {
     // Calldata: 68 bytes total
@@ -585,22 +585,6 @@ getDataAlias(0x00, 32) returns []
 
 - **Scenarios 1-6**: Multiple DataPts exist → resolve relationships → generate subcircuits
 - **Scenario 7**: No DataPts exist → provide default value → no subcircuits
-
-#### Summary: All Data Resolution Scenarios
-
-| Scenario                    | Opcodes                                      | Key Feature                                          | Type                |
-| --------------------------- | -------------------------------------------- | ---------------------------------------------------- | ------------------- |
-| **1. Overlapping Writes**   | MSTORE, MSTORE8                              | Multiple writes to same region                       | Aliasing Resolution |
-| **2. Offset Mismatch**      | MLOAD, MSTORE                                | Read/write offset misalignment                       | Aliasing Resolution |
-| **3. Calldata Chunking**    | CALLDATALOAD                                 | >32 bytes calldata (Alpha: oracle, Beta: full proof) | Aliasing Resolution |
-| **4. Multi-Chunk Read**     | KECCAK256, LOG0-LOG4                         | >32 bytes memory read                                | Aliasing Resolution |
-| **5. Memory Copy**          | MCOPY, CODECOPY, EXTCODECOPY, RETURNDATACOPY | Source/destination aliasing                          | Aliasing Resolution |
-| **6. External Code Copy**   | EXTCODECOPY                                  | External code chunking                               | Aliasing Resolution |
-| **7. Uninitialized Memory** | MLOAD                                        | Reading never-written memory                         | Edge Case           |
-
-**Common principle for Scenarios 1-6**: Aliasing resolution occurs whenever `getDataAlias` returns non-empty results, requiring reconstruction of memory values from multiple symbolic DataPts through subcircuit generation.
-
-**Edge Case (Scenario 7)**: When `getDataAlias` returns empty results, a default zero value is provided without subcircuit generation.
 
 #### How Aliasing Resolution Works
 
