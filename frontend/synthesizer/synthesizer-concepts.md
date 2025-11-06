@@ -152,7 +152,84 @@ Placements = {
 }
 ```
 
-In Synthesizer, all library’s subcircuits other than buffers are strictly allowed to handle only symbols as both inputs and outputs. In other words, buffer subcircuits are the only placements that can directly take non-symbol values as inputs or outputs. Additionally, there can be only one buffer placement of a given purpose within `Placements`. For example, in the scenario above, there can be at most one `LOAD` and one `RETURN` in `Placements`.
+In Synthesizer, all library's subcircuits other than buffers are strictly allowed to handle only symbols as both inputs and outputs. In other words, buffer subcircuits are the only placements that can directly take non-symbol values as inputs or outputs. Additionally, there can be only one buffer placement of a given purpose within `Placements`. For example, in the scenario above, there can be at most one `LOAD` and one `RETURN` in `Placements`.
+
+### L2 State Management with Merkle Trees
+
+For Layer 2 state channel implementations, Synthesizer employs a Merkle tree-based state management system to efficiently track and prove state transitions. This approach enables privacy-preserving, off-chain transactions that can be batched and verified on-chain.
+
+#### State Transition Flow
+
+The L2 state management follows a clear three-phase flow:
+
+1. **Initial State**: A Merkle root representing the initial storage state is provided as a public input (`INI_MERKLE_ROOT`)
+2. **Transaction Execution**: The Synthesizer processes the transaction while tracking all storage modifications
+3. **Final State**: A new Merkle root is computed and provided as a public output (`RES_MERKLE_ROOT`)
+
+This design allows verifiers to confirm that the state transition is valid without revealing the individual storage operations.
+
+#### Merkle Tree Structure
+
+The L2 implementation uses a **4-ary Merkle tree** with the following characteristics:
+
+- **Arity**: 4 children per node (optimizes proof size vs. depth trade-off)
+- **Depth**: 4 levels
+- **Maximum Leaves**: 64 (4^4 = 256 theoretical, but limited to 64 for circuit efficiency)
+- **Hash Function**: Poseidon (circuit-friendly, see "Poseidon Hash Function" section below)
+
+Each leaf in the Merkle tree represents a storage slot and is computed as:
+
+```
+leaf = Poseidon(index, key, value, 0)
+```
+
+Where:
+- `index`: The leaf's position in the tree (0-63)
+- `key`: The storage key (hashed with Poseidon for L2)
+- `value`: The storage value (255-bit word)
+- `0`: Padding element
+
+Internal nodes are computed by hashing their four children:
+
+```
+parent = Poseidon(child0, child1, child2, child3)
+```
+
+#### Registered Keys vs. General Storage
+
+Synthesizer distinguishes between two types of storage access:
+
+**Registered Keys** (User Storage):
+- Pre-defined storage slots specified in `TokamakL2StateManagerOpts`
+- Limited to 64 slots maximum
+- Tracked in the Merkle tree
+- Part of public inputs/outputs
+- Enables privacy-preserving state proofs
+
+**General Storage** (Contract Storage):
+- Any other storage accessed during execution
+- Not included in the Merkle tree
+- Handled via `OTHER_CONTRACT_STORAGE_IN` and `OTHER_CONTRACT_STORAGE_OUT` buffers
+- Recorded in the circuit but not part of the state commitment
+
+#### Merkle Proof Verification
+
+At the start of transaction processing (in the `_prepareSynthesizeTransaction()` method), Synthesizer prepares the initial state:
+
+1. Load registered keys from L1 contract storage via RPC
+2. Construct initial Merkle tree leaves
+3. Compute initial Merkle root
+4. Place `VerifyMerkleProof` subcircuit to validate `INI_MERKLE_ROOT` matches the computed root
+
+At the end of transaction processing (in the `finalizeStorage()` method), Synthesizer finalizes the state:
+
+1. Update Merkle tree leaves with new storage values
+2. Recompute the Merkle tree from leaves to root
+3. Output final Merkle root as `RES_MERKLE_ROOT`
+
+The `VerifyMerkleProof` subcircuit ensures that the initial state is correctly committed, while the final root proves the validity of all state transitions.
+
+**Reference**: See `synthesizer.ts:163-278` for the `finalizeStorage()` implementation.
 
 ### Stack, memory, storage, and flow operations
 
@@ -228,6 +305,56 @@ The placements that track symbol relationships resulting from these instructions
 
   <figure><img src="../../.gitbook/assets/Frame 32995.png" alt=""><figcaption></figcaption></figure>
 
+#### Poseidon Hash Function
+
+For Layer 2 state channel implementations, Synthesizer supports the **Poseidon hash function** as a circuit-friendly alternative to Keccak256. Poseidon is specifically designed for zero-knowledge proof systems and offers dramatic efficiency improvements when used inside circuits.
+
+**Performance Comparison**:
+- **Poseidon**: ~150 constraints
+- **Keccak256**: ~150,000 constraints (1000x more expensive)
+
+This 1000-fold reduction in circuit complexity makes Poseidon the preferred choice for L2 state channels where all cryptographic operations must be proven inside the circuit.
+
+**Usage in L2 Mode**:
+
+In L2 state channel mode, Poseidon replaces Keccak256 for:
+1. **Storage key hashing**: Computing storage slot addresses
+2. **Merkle tree construction**: Hashing tree nodes (4 children → 1 parent)
+3. **State commitments**: Creating compact state representations
+4. **Address derivation**: Computing L2 addresses from public keys
+
+The implementation uses a **4-input sponge construction** that iteratively folds variable-length inputs:
+
+```
+hash = Poseidon(input0, input1, input2, input3)
+```
+
+For inputs longer than 4 elements, the function recursively applies Poseidon until a single output remains.
+
+**L1 vs. L2 Mode**:
+
+Synthesizer supports both hash functions through the `getUserStorageKey()` method in `TokamakL2StateManager`:
+
+- **L1 Mode** (`usage: 'L1'`): Uses Keccak256 for Ethereum mainnet compatibility
+- **L2 Mode** (`usage: 'L2'`): Uses Poseidon for circuit efficiency
+
+This dual-mode design allows the same codebase to handle both on-chain (L1) and off-chain (L2) transactions, with the hash function automatically selected based on the execution context.
+
+**Custom Crypto Configuration**:
+
+In L2 mode, Synthesizer configures the EthereumJS Common object to use Poseidon:
+
+```typescript
+const common = new Common({
+  chain: Mainnet,
+  customCrypto: { keccak256: poseidon } // Replace Keccak with Poseidon
+})
+```
+
+This substitution is transparent to the EVM execution layer, allowing standard Ethereum transactions to be processed with L2-optimized cryptography.
+
+**Reference**: See `TokamakL2JS/crypto/index.ts:11-56` for the Poseidon implementation and `TokamakL2StateManager.ts:160-188` for the dual-mode storage key calculation.
+
 ### System operations
 
 Instructions in the system operations group manages EVM [contexts](https://www.evm.codes/about). These instructions enable the EVM to either enter a new child context or return to the existing parent context. Each context operates independently, in the perspective of managing its own stack and memory. Transferring memory data between parent and child contexts is exclusively handled by instructions in this group.
@@ -280,10 +407,156 @@ However, since some of these symbols are retrieved from specific memory regions,
 
 <figure><img src="../../.gitbook/assets/Frame 33117 (3).png" alt=""><figcaption></figcaption></figure>
 
+## L2 State Channel Transaction Signing
+
+For Layer 2 state channel implementations, Synthesizer uses a completely different signature scheme compared to standard Ethereum transactions. Instead of ECDSA (Elliptic Curve Digital Signature Algorithm) used on Ethereum mainnet, L2 transactions employ **EdDSA (Edwards-curve Digital Signature Algorithm)** on the **JubJub curve**.
+
+### Why EdDSA for L2 State Channels?
+
+The choice of EdDSA over ECDSA is driven by circuit efficiency in zero-knowledge proof systems:
+
+| Feature | EdDSA (JubJub) | ECDSA (secp256k1) |
+|---------|----------------|-------------------|
+| Circuit Constraints | ~10,000 | ~500,000 |
+| Verification Cost | Low | Very High |
+| Ethereum Compatible | No | Yes |
+| Use Case | L2 state channels | L1 transactions |
+
+The 50x reduction in verification constraints makes EdDSA the only practical choice for L2 state channels where signature verification must occur inside the circuit.
+
+### JubJub Curve
+
+JubJub is a **twisted Edwards curve** that is embedded in the BLS12-381 scalar field, making it ideal for integration with the Tokamak zk-SNARK proof system. The curve provides:
+
+- **Base point** (`JUBJUB_BASE_X`, `JUBJUB_BASE_Y`): The generator for key generation
+- **Point at infinity** (`JUBJUB_POI_X`, `JUBJUB_POI_Y`): The identity element
+- **Field-native operations**: Efficient arithmetic inside BLS12-381 circuits
+
+### TokamakL2Tx Transaction Structure
+
+L2 transactions use the `TokamakL2Tx` class, which extends Ethereum's `LegacyTx` but reinterprets the signature fields:
+
+**Standard Ethereum Transaction** (ECDSA):
+- `v`: Recovery ID (27 or 28) + chain ID encoding
+- `r`: ECDSA signature component (x-coordinate)
+- `s`: ECDSA signature component
+
+**TokamakL2 Transaction** (EdDSA):
+- `v`: Always `27n` (indicates EdDSA mode, no recovery needed)
+- `r`: EdDSA **randomizer point** R (serialized as bigint from Edwards point coordinates)
+- `s`: EdDSA **signature scalar** s (JubJub field element)
+
+This field reinterpretation allows L2 transactions to maintain compatibility with Ethereum transaction structures while using a completely different cryptographic scheme.
+
+### Signature Generation Process
+
+When signing an L2 transaction with `TokamakL2Tx.sign()`:
+
+1. **Message Construction**: Combine transaction fields into a message array:
+   ```
+   message = [nonce, to, selector, input0, input1, ..., input8, pubkey]
+   ```
+   Each element is padded to 32 bytes and hashed with Poseidon.
+
+2. **EdDSA Signing** (implemented in `eddsaSign_unsafe()`):
+   - Generate nonce: `nonce_hash = Poseidon(DST_NONCE, privateKey, extraEntropy)`
+   - Compute randomizer: `r = Poseidon(DST_NONCE, nonce_hash, pubkey, message) mod order`
+   - Compute randomizer point: `R = r * G` (where G is the base point)
+   - Compute challenge: `e = Poseidon(R_x, R_y, pubkey_x, pubkey_y, message) mod order`
+   - Compute signature: `s = (r + e * privateKey) mod order`
+   - Return: `(R, s)`
+
+3. **Transaction Fields**:
+   - Set `v = 27n`
+   - Set `r = bytesToBigInt(R.toBytes())`
+   - Set `s = signature scalar`
+
+### Signature Verification
+
+Signature verification in L2 transactions follows the EdDSA verification equation:
+
+```
+s * G = R + e * PublicKey
+```
+
+Where:
+- `s`: Signature scalar (from transaction)
+- `G`: JubJub base point
+- `R`: Randomizer point (from transaction)
+- `e`: Challenge hash `Poseidon(R, PublicKey, message)`
+- `PublicKey`: Sender's public key
+
+The `TokamakL2Tx.getSenderPublicKey()` method recovers and verifies the public key:
+
+1. Extract message from transaction fields
+2. Append the stored public key to the message
+3. Call `getEddsaPublicKey()` which internally calls `eddsaVerify()`
+4. Verify the stored public key matches the recovered key
+5. Return the verified public key
+
+**Note**: Unlike ECDSA where the public key is recovered from the signature, EdDSA requires the public key to be provided and verified. This is why `TokamakL2Tx` stores the sender's public key via `initSenderPubKey()`.
+
+### Address Derivation
+
+L2 addresses are derived differently from L1:
+
+**L1 Address** (Ethereum):
+```
+address = keccak256(ecrecover_pubkey)[12:32]  // Last 20 bytes
+```
+
+**L2 Address** (Tokamak):
+```
+address = poseidon(pubkey_x, pubkey_y, 0, 0)[12:32]  // Last 20 bytes
+```
+
+The `fromEdwardsToAddress()` function converts an EdDSA public key (Edwards point) to an Ethereum-compatible 20-byte address using Poseidon hashing.
+
+### Integration with Synthesizer
+
+During transaction processing, Synthesizer handles EdDSA signature verification:
+
+1. **Before Message** (`_prepareSynthesizeTransaction()`):
+   - Extract function selector and inputs from transaction data
+   - Recover sender address from EdDSA public key via `getOriginAddressPt()`
+   - Cache the origin address for use during execution
+
+2. **Circuit Integration**:
+   - Public key components (`EDDSA_PUBLIC_KEY_X`, `EDDSA_PUBLIC_KEY_Y`) are public inputs
+   - Signature scalar (`EDDSA_SIGNATURE`) and randomizer (`EDDSA_RANDOMIZER_X/Y`) are private inputs
+   - The backend prover generates placements for signature verification subcircuits
+
+This design enables privacy-preserving L2 transactions where signature validity is proven without revealing the signature itself to external observers.
+
+**Reference**: See `TokamakL2Tx.ts:56-89` for `getSenderPublicKey()` implementation and `crypto/index.ts:85-136` for EdDSA signing/verification.
+
 ## Features not yet implemented
 
 The following features or instructions are not currently supported in the existing version of Synthesizer. They will be implemented in the future.
 
 ### Batch transaction execution
 
-Currently, Synthesizer processes single transactions. Support for batch transaction execution will be added in future versions. This feature is essential for Layer 2 scaling solutions, particularly for state channel implementations where multiple off-chain transactions need to be batched and proven together when opening or closing channels.
+The infrastructure for batch transaction processing has been implemented but is not yet fully tested and enabled by default. Currently, Synthesizer processes single transactions in production mode.
+
+**Current Status** (Alpha):
+- Single transaction mode: ✅ Fully supported and tested
+- Batch transaction infrastructure: ✅ Implemented, 🧪 Testing in progress
+- Production use: Single transaction only
+
+**Planned Functionality** (Future Release):
+
+Batch transaction mode will enable multiple off-chain transactions to be processed sequentially and proven together in a single proof. This is essential for Layer 2 state channel implementations where:
+
+1. **State Channel Opening**: Multiple setup transactions initialize the channel state
+2. **Off-chain Operations**: Many micro-transactions occur without touching L1
+3. **State Channel Closing**: Batch of final transactions settles the accumulated state on-chain
+
+In batch mode, the Synthesizer will:
+- Process transactions sequentially, maintaining state across executions
+- Accumulate Merkle tree updates from all transactions
+- Generate a single proof covering the entire batch
+- Produce one initial Merkle root (before batch) and one final Merkle root (after batch)
+
+This approach dramatically reduces on-chain verification costs by amortizing proof generation and verification across multiple transactions.
+
+**Implementation Note**: The event-driven architecture (`beforeMessage`, `step`, `afterMessage`) supports batch processing, but additional testing and optimization are needed before production deployment.
