@@ -14,6 +14,12 @@ This document describes how the Tokamak Synthesizer handles each EVM opcode, com
   - Quick reference table with all 31+ implemented opcodes
 - [Detailed Opcode Reference](#0x01-add)
   - Individual opcode explanations with circuit generation details
+- [Cryptographic Operations (L2 State Channels)](#cryptographic-operations-l2-state-channels)
+  - Poseidon Hash
+  - EdDSA Signature Verification
+  - JubJub Scalar Multiplication
+  - Cryptographic Constants
+  - Integration with Event Hooks
 - [Circuit Complexity Summary](#circuit-complexity-summary)
 - [Related Resources](#related-resources)
 - [Appendix: Subcircuit Mapping Table](#appendix-subcircuit-mapping-table)
@@ -1252,6 +1258,329 @@ The Tokamak zk-EVM is designed specifically for Layer 2 state channel applicatio
 - Beneficiary updates
 
 **Note**: There are no plans to support this opcode, as it is outside the scope of state channel use cases.
+
+---
+
+## Cryptographic Operations (L2 State Channels)
+
+L2 state channels introduce specialized cryptographic operations for EdDSA signature verification, Poseidon hashing, and Merkle tree management. These operations are not standard EVM opcodes but are **custom subcircuits** used by the Synthesizer during event-driven hooks.
+
+### Overview
+
+| Operation         | Purpose                                 | Subcircuit            | Input Wires | Output Wires | Phase         |
+| ----------------- | --------------------------------------- | --------------------- | ----------- | ------------ | ------------- |
+| **Poseidon Hash** | Hash field elements (Merkle tree)       | `PoseidonCircuit2/4/9`| 2, 4, or 9  | 1            | beforeMessage, afterMessage |
+| **EdDSA Verify**  | Verify EdDSA signature                  | `EddsaVerify`         | 6           | 1 (bool)     | beforeMessage |
+| **JubJub Exp**    | JubJub scalar multiplication            | `JubjubExp`           | 3           | 2 (point)    | beforeMessage |
+
+### Poseidon Hash
+
+**Purpose**: Efficient hash function for zero-knowledge circuits
+
+**Subcircuits**:
+- `PoseidonCircuit2`: Hash 2 field elements (leaf hash)
+- `PoseidonCircuit4`: Hash 4 field elements (Merkle parent)
+- `PoseidonCircuit9`: Hash 9 field elements (transaction message)
+
+#### Standard EVM Behavior
+
+Not applicable (custom operation for L2).
+
+#### Synthesizer Behavior
+
+```typescript
+// Leaf hash: H(key, value)
+const leafHashPt = synthesizer.placeCrypto(
+  'PoseidonCircuit2',
+  [keyPt, valuePt]
+);
+
+// Parent hash: H(child0, child1, child2, child3)
+const parentHashPt = synthesizer.placeCrypto(
+  'PoseidonCircuit4',
+  [child0Pt, child1Pt, child2Pt, child3Pt]
+);
+
+// Transaction message hash
+const messageHashPt = synthesizer.placeCrypto(
+  'PoseidonCircuit9',
+  [noncePt, addressPt, selectorPt, ...inputPts]
+);
+```
+
+#### Circuit Details
+
+**Poseidon Properties**:
+- **Field**: BLS12-381 scalar field (R_MOD = 0x73ed...0001)
+- **Efficiency**: ~10x cheaper than Keccak256 in circuits
+- **Security**: Designed for ZK-SNARK-friendly hashing
+
+**Usage in Synthesizer**:
+1. **Leaf Hash** (Merkle tree): Combine storage key + value
+2. **Parent Hash** (Merkle tree): Combine 4 child hashes (4-ary tree)
+3. **Message Hash** (EdDSA): Hash transaction data before signing
+4. **Null Hashes**: Empty Merkle tree nodes (`NULL_POSEIDON_LEVEL0~3`)
+
+**Constraints**: Varies by arity
+- PoseidonCircuit2: ~150 constraints
+- PoseidonCircuit4: ~200 constraints
+- PoseidonCircuit9: ~350 constraints
+
+#### Example: Merkle Tree Root Computation
+
+```typescript
+// Step 1: Hash all leaves (key, value pairs)
+const leafHashPts = [];
+for (const [key, value] of registeredStorage) {
+  const leafPt = synthesizer.placeCrypto(
+    'PoseidonCircuit2',
+    [
+      synthesizer.loadAuxin(key),
+      synthesizer.loadAuxin(value)
+    ]
+  );
+  leafHashPts.push(leafPt);
+}
+
+// Step 2: Build level 1 (16 parent nodes from 64 leaves)
+const level1Pts = [];
+for (let i = 0; i < 16; i++) {
+  const children = [
+    leafHashPts[i * 4 + 0] || NULL_POSEIDON_LEVEL0,
+    leafHashPts[i * 4 + 1] || NULL_POSEIDON_LEVEL0,
+    leafHashPts[i * 4 + 2] || NULL_POSEIDON_LEVEL0,
+    leafHashPts[i * 4 + 3] || NULL_POSEIDON_LEVEL0
+  ];
+  
+  level1Pts.push(
+    synthesizer.placeCrypto('PoseidonCircuit4', children)
+  );
+}
+
+// Step 3: Build level 2 (4 nodes from 16)
+const level2Pts = [];
+for (let i = 0; i < 4; i++) {
+  level2Pts.push(
+    synthesizer.placeCrypto('PoseidonCircuit4', level1Pts.slice(i * 4, (i + 1) * 4))
+  );
+}
+
+// Step 4: Compute root (1 node from 4)
+const rootPt = synthesizer.placeCrypto('PoseidonCircuit4', level2Pts);
+
+// Step 5: Export as public output
+synthesizer.addReservedVariableToBufferOut('RES_MERKLE_ROOT', rootPt, true);
+```
+
+**Source**: [`packages/frontend/synthesizer/src/TokamakL2JS/crypto/index.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/TokamakL2JS/crypto/index.ts#L10-L35)
+
+---
+
+### EdDSA Signature Verification
+
+**Purpose**: Verify EdDSA signatures on JubJub curve
+
+**Subcircuit**: `EddsaVerify`
+
+#### Standard EVM Behavior
+
+Not applicable (custom operation for L2, replaces ECDSA verification).
+
+#### Synthesizer Behavior
+
+```typescript
+// Step 1: Load message hash (from Poseidon)
+const messageHashPt = synthesizer.placeCrypto(
+  'PoseidonCircuit9',
+  messagePts
+);
+
+// Step 2: Load public key (from PUBLIC_IN buffer)
+const publicKeyXPt = synthesizer.getReservedVariableFromBuffer('EDDSA_PUBLIC_KEY_X');
+const publicKeyYPt = synthesizer.getReservedVariableFromBuffer('EDDSA_PUBLIC_KEY_Y');
+
+// Step 3: Load signature components (from PRIVATE_IN buffer)
+const randomizerXPt = synthesizer.getReservedVariableFromBuffer('EDDSA_RANDOMIZER_X');
+const randomizerYPt = synthesizer.getReservedVariableFromBuffer('EDDSA_RANDOMIZER_Y');
+const signaturePt = synthesizer.getReservedVariableFromBuffer('EDDSA_SIGNATURE');
+
+// Step 4: Verify signature
+const isValidPt = synthesizer.placeCrypto(
+  'EddsaVerify',
+  [
+    messageHashPt,
+    publicKeyXPt, publicKeyYPt,
+    randomizerXPt, randomizerYPt,
+    signaturePt
+  ]
+);
+
+// Step 5: Assert isValidPt == 1 (signature must be valid)
+const resultPt = synthesizer.placeArith('SUB', [isValidPt, synthesizer.loadAuxin(1n)]);
+// If resultPt != 0, circuit fails
+```
+
+#### Circuit Details
+
+**EdDSA on JubJub Curve**:
+- **Curve**: JubJub (Edwards curve over BLS12-381 scalar field)
+- **Equation**: \( ax^2 + y^2 = 1 + dx^2y^2 \)
+- **Parameters**:
+  - \( a = -1 \)
+  - \( d = -(10240/10241) \mod R\_MOD \)
+- **Base Point**: Hardcoded in circuit (JUBJUB_BASE_X, JUBJUB_BASE_Y)
+
+**Signature Components**:
+1. **Public Key**: \( (P_x, P_y) \) - Point on JubJub curve
+2. **Randomizer**: \( R = (R_x, R_y) \) - Random point
+3. **Signature**: \( s \) - Scalar (255-bit)
+
+**Verification Formula**:
+```
+s * G = R + H(R, P, M) * P
+```
+Where:
+- \( G \): Base point
+- \( H \): Poseidon hash
+- \( M \): Message hash
+
+**Constraints**: ~5,000 constraints (includes JubJub scalar multiplication)
+
+**Execution Phase**: `beforeMessage` (before EVM execution)
+
+**Source**: [`packages/frontend/synthesizer/src/synthesizer/handlers/instructionHandler.ts:389-450`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/synthesizer/handlers/instructionHandler.ts#L389-L450)
+
+---
+
+### JubJub Scalar Multiplication
+
+**Purpose**: Multiply a point on JubJub curve by a scalar
+
+**Subcircuit**: `JubjubExp`
+
+#### Standard EVM Behavior
+
+Not applicable (custom cryptographic operation for L2).
+
+#### Synthesizer Behavior
+
+```typescript
+// Compute s * G (scalar multiplication)
+const [resultXPt, resultYPt] = synthesizer.placeCrypto(
+  'JubjubExp',
+  [
+    scalarPt,           // Scalar (255-bit)
+    basePointXPt,       // Base point X
+    basePointYPt        // Base point Y
+  ]
+);
+
+// Used internally by EddsaVerify
+```
+
+#### Circuit Details
+
+**JubJub Curve Properties**:
+- **Group Order**: \( r = 2^{252} + 27742317777372353535851937790883648493 \)
+- **Cofactor**: 8
+- **Base Point**: Hardcoded (JUBJUB_BASE_X, JUBJUB_BASE_Y)
+
+**Algorithm**: Double-and-add (255 iterations)
+
+**Constraints**: ~3,000 constraints (255 doublings + 128 additions on average)
+
+**Usage**:
+- Internal to `EddsaVerify` subcircuit
+- Computes \( s \cdot G \) and \( H(R, P, M) \cdot P \)
+
+**Source**: [`packages/frontend/qap-compiler/circuits/EdDSA/JubjubExp.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler/circuits/EdDSA)
+
+---
+
+### Cryptographic Constants (EVM_IN Buffer)
+
+The Synthesizer preloads cryptographic constants into the `EVM_IN` reserved variables buffer:
+
+| Variable              | Value                                      | Purpose                        |
+| --------------------- | ------------------------------------------ | ------------------------------ |
+| `ADDRESS_MASK`        | \( 2^{160} - 1 \)                          | Mask for Ethereum addresses    |
+| `JUBJUB_BASE_X`       | 0x0e4840ac57f86f5e...                      | JubJub base point X coordinate |
+| `JUBJUB_BASE_Y`       | 0x2bcd9508a3dad316...                      | JubJub base point Y coordinate |
+| `JUBJUB_POI_X`        | 0 (point at infinity)                      | JubJub identity element X      |
+| `JUBJUB_POI_Y`        | 1 (point at infinity)                      | JubJub identity element Y      |
+| `NULL_POSEIDON_LEVEL0`| Poseidon hash of empty string at level 0   | Empty Merkle tree leaf         |
+| `NULL_POSEIDON_LEVEL1`| Poseidon hash of 4 empty level 0 nodes    | Empty Merkle tree level 1      |
+| `NULL_POSEIDON_LEVEL2`| Poseidon hash of 4 empty level 1 nodes    | Empty Merkle tree level 2      |
+| `NULL_POSEIDON_LEVEL3`| Poseidon hash of 4 empty level 2 nodes    | Empty Merkle tree root (empty) |
+
+**Initialization**: [`packages/frontend/synthesizer/src/synthesizer/handlers/bufferManager.ts:142-154`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/synthesizer/handlers/bufferManager.ts#L142-L154)
+
+---
+
+### Integration with Event Hooks
+
+Cryptographic operations are triggered during specific EVM event phases:
+
+#### beforeMessage Phase
+
+**Purpose**: Verify transaction authenticity before execution
+
+```typescript
+evm.events.on('beforeMessage', async (msg) => {
+  if (tx instanceof TokamakL2Tx) {
+    // 1. Hash transaction message
+    const messageHashPt = synthesizer.placeCrypto('PoseidonCircuit9', messagePts);
+    
+    // 2. Verify EdDSA signature
+    const isValidPt = synthesizer.placeCrypto('EddsaVerify', [
+      messageHashPt,
+      publicKeyXPt, publicKeyYPt,
+      randomizerXPt, randomizerYPt,
+      signaturePt
+    ]);
+    
+    // 3. Assert signature is valid
+    synthesizer.placeArith('SUB', [isValidPt, synthesizer.loadAuxin(1n)]);
+  }
+});
+```
+
+#### afterMessage Phase
+
+**Purpose**: Finalize Merkle tree state and export root
+
+```typescript
+evm.events.on('afterMessage', async (result) => {
+  if (stateManager instanceof TokamakL2StateManager) {
+    // 1. Hash all updated leaves
+    const leafHashPts = stateManager.finalMerkleTree.leaves.map(leaf =>
+      synthesizer.placeCrypto('PoseidonCircuit2', [leaf.keyPt, leaf.valuePt])
+    );
+    
+    // 2. Build Merkle tree bottom-up (4-ary)
+    let currentLevel = leafHashPts;
+    for (let level = 0; level < 3; level++) {
+      const nextLevel = [];
+      for (let i = 0; i < currentLevel.length; i += 4) {
+        const children = [
+          currentLevel[i + 0] || getNullHash(level),
+          currentLevel[i + 1] || getNullHash(level),
+          currentLevel[i + 2] || getNullHash(level),
+          currentLevel[i + 3] || getNullHash(level)
+        ];
+        nextLevel.push(synthesizer.placeCrypto('PoseidonCircuit4', children));
+      }
+      currentLevel = nextLevel;
+    }
+    
+    // 3. Export final root
+    const finalRootPt = currentLevel[0];
+    synthesizer.addReservedVariableToBufferOut('RES_MERKLE_ROOT', finalRootPt, true);
+  }
+});
+```
+
+**Source**: [`packages/frontend/synthesizer/src/synthesizer/synthesizer.ts:110-278`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/synthesizer/synthesizer.ts#L110-L278)
 
 ---
 

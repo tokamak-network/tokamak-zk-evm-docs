@@ -118,7 +118,11 @@ Before processing the transaction, Synthesizer prepares its environment:
 
 ### Step 2: Initialization
 
-When you invoke Synthesizer, it creates the execution environment:
+When you invoke Synthesizer, it creates the execution environment. The initialization process differs between standard L1 transactions and L2 state channel transactions.
+
+#### Standard L1 Initialization
+
+For regular Ethereum transactions:
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -139,8 +143,8 @@ When you invoke Synthesizer, it creates the execution environment:
 ┌────────────────────────────────────────────────────────┐
 │  Synthesizer creates internal managers:                │
 │  - StateManager (holds Placements map)                 │
-│  - OperationHandler (arithmetic ops)                   │
-│  - DataLoader (external data)                          │
+│  - ArithmeticManager (arithmetic ops)                  │
+│  - InstructionHandler (opcode handlers)                │
 │  - MemoryManager (memory aliasing)                     │
 │  - BufferManager (LOAD/RETURN buffers)                 │
 └────────────────────────────────────────────────────────┘
@@ -158,7 +162,41 @@ When you invoke Synthesizer, it creates the execution environment:
     Ready to execute bytecode
 ```
 
-**What happens here:**
+#### L2 State Channel Initialization
+
+For L2 state channel transactions, use `createSynthesizerOptsForSimulationFromRPC()`:
+
+```typescript
+import { createSynthesizerOptsForSimulationFromRPC } from './interface/index.ts';
+
+const opts = await createSynthesizerOptsForSimulationFromRPC({
+  rpcUrl: 'https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY',
+  blockNumber: 12345678,
+  contractAddress: '0x...',              // L1 contract address
+  addressListL1: ['0x...'],              // L1 user addresses
+  publicKeyListL2: [pubKeyBytes],        // Corresponding L2 public keys
+  senderL2PrvKey: privateKeyBytes,       // EdDSA private key
+  txNonce: 0n,
+  userStorageSlots: [0, 1],              // Registered storage slots
+  callData: calldataBytes,
+});
+
+const synthesizer = new Synthesizer(opts);
+```
+
+This initialization:
+
+1. **Fetches L1 State**: Queries registered storage values from L1 contract
+2. **Maps L1→L2**: Converts L1 addresses to L2 public keys  
+3. **Constructs Initial Merkle Tree**: Builds 4-ary tree from registered keys
+4. **Signs Transaction**: Creates EdDSA signature with provided private key
+5. **Configures Custom Crypto**: Sets Poseidon as hash function (replaces Keccak256)
+
+The result is a `TokamakL2StateManager` that tracks state transitions via Merkle tree updates.
+
+**Reference**: See `interface/rpc/rpc.ts:64-101` for implementation.
+
+**What happens in both modes:**
 
 The EVM is instantiated with an attached Synthesizer. Think of it as running two virtual machines in parallel:
 
@@ -167,16 +205,73 @@ The EVM is instantiated with an attached Synthesizer. Think of it as running two
 
 At this point:
 
-- The `Placements` map is empty (will be populated during execution)
-- Buffer placements (IDs 0-3) are pre-initialized for LOAD and RETURN operations
+- The `Placements` map is initialized with 5 buffer placements (IDs 0-4)
 - Both `Stack` and `StackPt` are empty
 - Both `Memory` and `MemoryPt` are empty
+- For L2: Initial Merkle root is set as public input
 
 ---
 
-### Step 3: Bytecode Execution (Dual Processing)
+### Step 3: Event-Driven Execution
 
-Now the interpreter begins executing the transaction bytecode. For **every single opcode**, both the EVM and Synthesizer process it in parallel:
+Synthesizer uses an **event-driven architecture** that hooks into the EVM's message lifecycle. The execution is divided into three phases, each triggered by EVM events:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    EVENT-DRIVEN EXECUTION FLOW                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+    📨 beforeMessage Event              🔄 step Event (repeated)           📬 afterMessage Event
+           │                                     │                                  │
+           ▼                                     ▼                                  ▼
+┌──────────────────────────┐      ┌──────────────────────────┐      ┌──────────────────────────┐
+│ _prepareSynthesizeTransaction │   │  _applySynthesizerHandler │      │   finalizeStorage()      │
+│                          │      │                          │      │                          │
+│ • Verify EdDSA signature │      │  For EACH opcode:        │      │ • Construct final        │
+│ • Recover ORIGIN address │      │  ┌─────────────────────┐ │      │   Merkle tree            │
+│ • Setup function selector│      │  │ EVM Handler         │ │      │ • Verify initial root    │
+│ • Prepare calldata cache │      │  │ • Execute opcode    │ │      │ • Output final root      │
+│                          │      │  │ • Update Stack      │ │      │ • Handle general storage │
+└──────────────────────────┘      │  └─────────────────────┘ │      └──────────────────────────┘
+           │                      │  ┌─────────────────────┐ │                  │
+           │                      │  │ Synthesizer Handler │ │                  │
+           ▼                      │  │ • Pop from StackPt  │ │                  ▼
+    Transaction ready             │  │ • Create placement  │ │         Circuit complete
+    for execution                 │  │ • Push to StackPt   │ │         with state proof
+                                  │  └─────────────────────┘ │
+                                  │  ┌─────────────────────┐ │
+                                  │  │ Consistency Check   │ │
+                                  │  │ Stack == StackPt?   │ │
+                                  │  └─────────────────────┘ │
+                                  └──────────────────────────┘
+```
+
+#### Phase 1: beforeMessage Event
+
+**Triggered**: Once, before transaction execution begins  
+**Handler**: `_prepareSynthesizeTransaction()` (`synthesizer.ts:142-161`)
+
+This phase prepares the transaction for execution:
+
+1. **Clear Call Stack**: Reset `callMemoryPtsStack` for new transaction context
+2. **Setup Function Interface**: 
+   - Extract function selector from calldata (first 4 bytes)
+   - Extract 9 function inputs (bytes 4-292, each 32 bytes)
+   - Store in `callMemoryPtsStack[0]` for main context access
+3. **Signature Verification** (L2 only):
+   - Recover sender's public key from EdDSA signature
+   - Verify signature matches transaction message
+   - Derive sender address from public key
+4. **Cache ORIGIN**: Store recovered/verified address as `cachedOrigin`
+
+**Key Point**: For L2 transactions, this phase performs signature verification **inside the circuit** by placing verification subcircuits. The signature validity becomes part of the zero-knowledge proof.
+
+#### Phase 2: step Event
+
+**Triggered**: For every opcode execution  
+**Handler**: `_applySynthesizerHandler()` (`synthesizer.ts:330-343`)
+
+This is the core execution loop. For **each opcode**, both the EVM and Synthesizer process it:
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -209,27 +304,71 @@ Now the interpreter begins executing the transaction bytecode. For **every singl
                         Continue to next opcode
 ```
 
-**What happens here:**
-
-This is the core of Synthesizer. For example, when processing `ADD`:
+**Example**: Processing `ADD` instruction:
 
 **EVM side:**
-
 1. Pops two values: `a = 10`, `b = 5`
 2. Computes: `result = 15`
 3. Pushes `15` to Stack
 
 **Synthesizer side:**
-
 1. Pops two symbols: `x`, `y` (where `x.value = 10`, `y.value = 5`)
-2. Creates a new placement: `MUL_placement = ALU1(x, y)`
-3. Creates output symbol: `z` (where `z.value = 15`, `z.source = MUL_placement`)
+2. Creates a new placement: `ADD_placement = ALU1(selector, x, y)`
+3. Creates output symbol: `z` (where `z.value = 15`, `z.source = ADD_placement`)
 4. Pushes `z` to StackPt
-5. Records: `Placements[4] = { name: "ALU1", usage: "ADD", inputs: [x, y], outputs: [z] }`
+5. Records: `Placements[N] = { name: "ALU1", usage: "ADD", inPts: [sel, x, y], outPts: [z] }`
 
 After every opcode, Synthesizer verifies that `Stack[i].value == StackPt[i].value` for all elements. This ensures the symbolic execution matches the actual execution.
 
+**Special Handling**: The `_preTasksForCalls()` method handles CALL-family instructions, setting up memory buffers for context switches.
+
 **Key insight**: Synthesizer is not simulating the EVM—it's **shadowing** it. The EVM computes the actual values, while Synthesizer builds a mathematical proof of how those values were derived.
+
+#### Phase 3: afterMessage Event
+
+**Triggered**: Once, after all opcodes complete  
+**Handler**: `finalizeStorage()` (`synthesizer.ts:163-278`)
+
+This phase finalizes the transaction's state changes:
+
+1. **Complete Registered Storage Access**:
+   - For each registered key that wasn't accessed, perform cold read
+   - Ensures all registered slots are tracked in circuit
+
+2. **Build Initial Merkle Tree**:
+   ```
+   For each registered key:
+     leaf = Poseidon(index, key, initial_value, 0)
+   
+   Compute tree bottom-up:
+     Level 0: 64 leaves → 16 nodes (Poseidon of 4 leaves each)
+     Level 1: 16 nodes → 4 nodes
+     Level 2: 4 nodes → 1 node (would be root, but we pad to 4)
+     Level 3: Verify 4 padded nodes match INI_MERKLE_ROOT
+   ```
+
+3. **Verify Initial Root**:
+   - Place `VerifyMerkleProof` subcircuit
+   - Constrain computed root equals `INI_MERKLE_ROOT` (public input)
+
+4. **Build Final Merkle Tree**:
+   - Use same process but with **final** storage values
+   - Compute root from updated leaves
+
+5. **Output Final Root**:
+   - Add final root to `RES_MERKLE_ROOT` buffer (public output)
+   - This proves the state transition is valid
+
+6. **Handle General Storage**:
+   - For non-registered keys, find last write operation
+   - Add to `OTHER_CONTRACT_STORAGE_OUT` buffer
+
+**Null Node Optimization**: Empty leaves are replaced with precomputed null hashes (`NULL_POSEIDON_LEVEL0` through `NULL_POSEIDON_LEVEL3`), avoiding redundant Poseidon computations.
+
+**Key Point**: This phase creates a cryptographic proof of state transition. Verifiers can confirm:
+- Initial state matches expected (via `INI_MERKLE_ROOT`)
+- Final state is correctly computed (via `RES_MERKLE_ROOT`)
+- All state changes are accounted for
 
 ---
 

@@ -681,12 +681,164 @@ storage[key]=15 <───── PRV_OUT (ID=3) <──────────�
 
 ---
 
+## Reserved Variables
+
+### Overview
+
+Reserved Variables are **predefined symbolic variables** that bridge external data with circuit logic. Each variable has a fixed buffer assignment and wire index, enabling deterministic circuit compilation.
+
+```
+┌───────────────────────────────────────────────────────────────────┐
+│  Reserved Variables: Circuit I/O Interface                        │
+├───────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  External World           Reserved Variables          Circuit     │
+│  ───────────────          ───────────────────          ────────   │
+│                                                                   │
+│  Block data        ──>    BLOCK_IN buffer     ──>    DataPt      │
+│  Transaction       ──>    PRIVATE_IN buffer   ──>    DataPt      │
+│  L2 State          ──>    PUBLIC_IN buffer    ──>    DataPt      │
+│  Constants         ──>    EVM_IN buffer       ──>    DataPt      │
+│                                                                   │
+│  Circuit output    <──    PUBLIC_OUT buffer   <──    DataPt      │
+│                                                                   │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+### Buffer Assignment
+
+Reserved Variables are organized into five buffers:
+
+| Buffer ID | Buffer Name   | Purpose                                      | Access   |
+| --------- | ------------- | -------------------------------------------- | -------- |
+| 0         | `PUBLIC_OUT`  | Circuit output (Merkle roots, storage out)   | Output   |
+| 1         | `PUBLIC_IN`   | Public input (Merkle roots, EdDSA keys)      | Input    |
+| 2         | `BLOCK_IN`    | Block data (coinbase, timestamp, blockhash)  | Input    |
+| 3         | `EVM_IN`      | Static constants (curve points, masks)       | Input    |
+| 4         | `PRIVATE_IN`  | Private input (tx data, signatures, proofs)  | Input    |
+
+### PUBLIC_OUT Variables (Buffer 0)
+
+**Purpose**: Circuit outputs, including final state and storage updates
+
+| Variable                      | Type    | Description                              | Wire Index |
+| ----------------------------- | ------- | ---------------------------------------- | ---------- |
+| `RES_MERKLE_ROOT`             | Dynamic | Resulting Merkle tree root hash (255-bit)| Dynamic    |
+| `OTHER_CONTRACT_STORAGE_OUT`  | Dynamic | General contract storage writes          | Dynamic    |
+
+### PUBLIC_IN Variables (Buffer 1)
+
+**Purpose**: Public inputs visible to verifier
+
+| Variable                      | Type    | Description                              | Wire Index |
+| ----------------------------- | ------- | ---------------------------------------- | ---------- |
+| `INI_MERKLE_ROOT`             | Static  | Initial Merkle tree root hash (255-bit)  | 0          |
+| `EDDSA_PUBLIC_KEY_X`          | Static  | EdDSA public key (x coordinate, 255-bit) | 1          |
+| `EDDSA_PUBLIC_KEY_Y`          | Static  | EdDSA public key (y coordinate, 255-bit) | 2          |
+| `OTHER_CONTRACT_STORAGE_IN`   | Dynamic | General contract storage reads           | Dynamic    |
+
+### BLOCK_IN Variables (Buffer 2)
+
+**Purpose**: Ethereum block information
+
+| Variable                      | Type    | Description                              | Wire Index |
+| ----------------------------- | ------- | ---------------------------------------- | ---------- |
+| `COINBASE`                    | Static  | Block coinbase address                   | 0          |
+| `TIMESTAMP`                   | Static  | Block timestamp                          | 1          |
+| `NUMBER`                      | Static  | Block number                             | 2          |
+| `PREVRANDAO`                  | Static  | Previous block randomness (difficulty)   | 3          |
+| `GASLIMIT`                    | Static  | Block gas limit                          | 4          |
+| `CHAINID`                     | Static  | Chain ID                                 | 5          |
+| `SELFBALANCE`                 | Static  | Contract balance                         | 6          |
+| `BASEFEE`                     | Static  | Base fee per gas                         | 7          |
+| `BLOCKHASH_1` ~ `BLOCKHASH_256` | Static | Block hashes (1-256 blocks ago)       | 8 ~ 263    |
+
+**Note**: `BLOCKHASH_N` stores the hash of the block N blocks before the current block.
+
+### PRIVATE_IN Variables (Buffer 4)
+
+**Purpose**: Private witness data (hidden from verifier)
+
+| Variable                      | Type    | Description                              | Wire Index |
+| ----------------------------- | ------- | ---------------------------------------- | ---------- |
+| `TRANSACTION_NONCE`           | Static  | Transaction nonce                        | 0          |
+| `CONTRACT_ADDRESS`            | Static  | Target contract address                  | 1          |
+| `FUNCTION_SELECTOR`           | Static  | Function selector (first 4 bytes)        | 2          |
+| `TRANSACTION_INPUT0` ~ `TRANSACTION_INPUT8` | Static | Transaction input data (9 × 32 bytes) | 3 ~ 11 |
+| `EDDSA_SIGNATURE`             | Static  | EdDSA signature (s component, 255-bit)   | 12         |
+| `EDDSA_RANDOMIZER_X`          | Static  | EdDSA R point (x coordinate, 255-bit)    | 13         |
+| `EDDSA_RANDOMIZER_Y`          | Static  | EdDSA R point (y coordinate, 255-bit)    | 14         |
+| `IN_MT_INDEX`                 | Dynamic | Merkle tree leaf index                   | Dynamic    |
+| `IN_MPT_KEY`                  | Dynamic | Storage key (for Merkle proof)           | Dynamic    |
+| `IN_VALUE`                    | Dynamic | Storage value (witness)                  | Dynamic    |
+| `MERKLE_PROOF`                | Dynamic | Merkle proof siblings                    | Dynamic    |
+
+### EVM_IN Variables (Buffer 3)
+
+**Purpose**: Static constants and cryptographic parameters
+
+| Variable                      | Type    | Description                              | Wire Index |
+| ----------------------------- | ------- | ---------------------------------------- | ---------- |
+| `ADDRESS_MASK`                | Static  | Address mask (2^160 - 1)                 | 0          |
+| `JUBJUB_BASE_X`               | Static  | JubJub curve base point (x, 255-bit)     | 1          |
+| `JUBJUB_BASE_Y`               | Static  | JubJub curve base point (y, 255-bit)     | 2          |
+| `JUBJUB_POI_X`                | Static  | JubJub point at infinity (x, 255-bit)    | 3          |
+| `JUBJUB_POI_Y`                | Static  | JubJub point at infinity (y, 255-bit)    | 4          |
+| `NULL_POSEIDON_LEVEL0` ~ `NULL_POSEIDON_LEVEL3` | Static | Empty Merkle tree hashes (255-bit) | 5 ~ 8 |
+
+### Usage Example
+
+```typescript
+// Reading reserved variables
+const iniRoot = synthesizer.getReservedVariableFromBuffer('INI_MERKLE_ROOT');
+const eddsaPubKeyX = synthesizer.getReservedVariableFromBuffer('EDDSA_PUBLIC_KEY_X');
+const timestamp = synthesizer.getReservedVariableFromBuffer('TIMESTAMP');
+
+// Adding dynamic input variables
+const mtIndexPt = synthesizer.addReservedVariableToBufferIn(
+  'IN_MT_INDEX', 
+  BigInt(leafIndex), 
+  true // dynamic
+);
+
+// Adding output variables
+synthesizer.addReservedVariableToBufferOut(
+  'RES_MERKLE_ROOT', 
+  finalRootPt, 
+  true // dynamic
+);
+```
+
+### Static vs Dynamic Variables
+
+- **Static**: Fixed wire index, assigned during initialization
+  - Example: `INI_MERKLE_ROOT` always at wire 0 of `PUBLIC_IN`
+  - Efficient for known circuit layout
+  
+- **Dynamic**: Wire index assigned at runtime (marked with `-1`)
+  - Example: `MERKLE_PROOF` siblings (count varies by proof depth)
+  - Flexible for variable-length data
+
+### L2-Specific Variables
+
+L2 state channels introduce new variables for:
+
+1. **EdDSA Signing**: `EDDSA_PUBLIC_KEY_X/Y`, `EDDSA_SIGNATURE`, `EDDSA_RANDOMIZER_X/Y`
+2. **Merkle Tree State**: `INI_MERKLE_ROOT`, `RES_MERKLE_ROOT`, `NULL_POSEIDON_LEVEL0~3`
+3. **State Proofs**: `IN_MT_INDEX`, `IN_MPT_KEY`, `IN_VALUE`, `MERKLE_PROOF`
+4. **Cryptographic Constants**: `JUBJUB_BASE_X/Y`, `JUBJUB_POI_X/Y`, `ADDRESS_MASK`
+
+---
+
 ## Related Resources
 
 ### Tokamak zk-EVM Source Code
 
-- [DataPt Type Definition](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/types/synthesizer.ts#L48-L69)
-- [DataPointFactory](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/pointers/dataPointFactory.ts)
-- [StackPt Implementation](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/pointers/stackPt.ts)
-- [MemoryPt Implementation](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/pointers/memoryPt.ts)
-- [StateManager](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/core/handlers/stateManager.ts)
+- [Reserved Variable Types](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/synthesizer/types/buffers.ts#L5-L310)
+- [Variable Descriptions](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/synthesizer/types/buffers.ts#L326-L587)
+- [Buffer Manager](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/synthesizer/handlers/bufferManager.ts)
+- [Buffer Configuration](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/interface/qapCompiler/configuredTypes.ts#L40-L57)
+- [DataPt Type Definition](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/synthesizer/types/synthesizer.ts)
+- [StackPt Implementation](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/synthesizer/pointers/stackPt.ts)
+- [MemoryPt Implementation](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/synthesizer/pointers/memoryPt.ts)
+- [StateManager](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/synthesizer/handlers/stateManager.ts)

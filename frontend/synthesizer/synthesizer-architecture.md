@@ -242,38 +242,66 @@ This diagram shows the complete code execution path from transaction input to ci
 
 ```
 packages/frontend/synthesizer/src/
-├── evm.ts                          # Extended EVM class
-├── interpreter.ts                  # Dual execution engine
-├── constructors.ts                 # EVM factory functions
-├── message.ts                      # Transaction message wrapper
-├── opcodes/
-│   ├── functions.ts                # EVM opcode handlers
-│   └── synthesizer/
-│       └── handlers.ts             # Synthesizer opcode handlers
-├── adapters/
-│   └── synthesizerAdapter.ts      # External API interface
-├── tokamak/
-│   ├── core/
-│   │   ├── synthesizer/
-│   │   │   └── index.ts           # Main Synthesizer class (Facade)
-│   │   ├── handlers/
-│   │   │   ├── stateManager.ts    # State management
-│   │   │   ├── operationHandler.ts # Arithmetic/logic ops
-│   │   │   ├── dataLoader.ts      # External data (storage, env, etc.)
-│   │   │   ├── memoryManager.ts   # Memory aliasing resolution
-│   │   │   └── bufferManager.ts   # LOAD/RETURN buffer management
-│   │   └── finalizer/
-│   │       ├── index.ts           # Finalizer orchestrator
-│   │       ├── permutation.ts     # Wire map generation
-│   │       └── placementRefactor.ts # Wire size optimization
-│   ├── pointers/
+├── synthesizer/
+│   ├── synthesizer.ts             # Main Synthesizer class (Facade)
+│   ├── constructors.ts            # Synthesizer factory functions
+│   ├── handlers/
+│   │   ├── stateManager.ts        # State management & Placements
+│   │   ├── arithmeticManager.ts   # Arithmetic/logic operations
+│   │   ├── instructionHandler.ts  # Opcode handler mapping
+│   │   ├── memoryManager.ts       # Memory aliasing resolution
+│   │   └── bufferManager.ts       # LOAD/RETURN buffer management
+│   ├── dataStructure/
+│   │   ├── dataPt.ts              # DataPt factory & types
 │   │   ├── stackPt.ts             # Symbolic stack
-│   │   ├── memoryPt.ts            # 2D memory tracker
-│   │   └── dataPointFactory.ts    # Symbol factory
-│   ├── types/                     # TypeScript type definitions
-│   ├── constant/                  # Constants & subcircuit mappings
-│   └── utils/                     # Utility functions
+│   │   ├── memoryPt.ts            # 2D memory tracker with time
+│   │   └── arithmeticOperations.ts # Arithmetic helpers
+│   ├── types/
+│   │   ├── synthesizer.ts         # SynthesizerOpts, Interface
+│   │   ├── buffers.ts             # Reserved variables & buffers
+│   │   ├── dataStructure.ts       # DataPt, MemoryPts types
+│   │   ├── instructions.ts        # Opcode types
+│   │   └── placements.ts          # Placement types
+│   └── params/
+│       └── index.ts               # Constants (Poseidon, etc.)
+├── TokamakL2JS/                   # NEW: L2 Components
+│   ├── tx/
+│   │   ├── TokamakL2Tx.ts         # EdDSA transaction class
+│   │   └── constructors.ts        # TX factory functions
+│   ├── stateManager/
+│   │   ├── TokamakL2StateManager.ts # Merkle tree state manager
+│   │   ├── constructors.ts        # State manager factories
+│   │   └── types.ts               # State manager types
+│   ├── crypto/
+│   │   └── index.ts               # EdDSA, Poseidon hash
+│   └── utils/
+│       └── index.ts               # Address derivation, etc.
+├── interface/
+│   ├── index.ts                   # Public API exports
+│   ├── rpc/
+│   │   └── rpc.ts                 # createSynthesizerOptsForSimulationFromRPC
+│   ├── adapters/
+│   │   └── synthesizerAdapter.ts  # Adapter utilities
+│   └── qapCompiler/
+│       ├── configuredTypes.ts     # Subcircuit name mappings
+│       ├── importedConstants.ts   # From qap-compiler package
+│       ├── types.ts               # QAP compiler types
+│       └── utils.ts               # QAP utilities
+├── circuitGenerator/
+│   ├── circuitGenerator.ts        # Generates permutation map
+│   ├── witness_calculator.ts      # WASM witness calculator
+│   └── handlers/
+│       ├── permutationGenerator.ts # Permutation logic
+│       └── variableGenerator.ts   # Variable mapping
+└── types/
+    └── (various shared type definitions)
 ```
+
+**Key Changes from Old Structure**:
+- Moved from `tokamak/core/` to flat `synthesizer/` directory
+- Added `TokamakL2JS/` for L2 state channel components
+- Renamed handlers: `operationHandler` → `arithmeticManager`, `dataLoader` → removed (integrated into instructionHandler)
+- Added `interface/` for public API and RPC utilities
 
 ---
 
@@ -324,44 +352,69 @@ export class EVM implements EVMInterface {
 ### Synthesizer Class Hierarchy
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      EVM (Extended)                      │
-│  ┌────────────────────────────────────────────────────┐ │
-│  │           Synthesizer (Facade)                     │ │
-│  │  ┌──────────────────────────────────────────────┐ │ │
-│  │  │  StateManager                                 │ │ │
-│  │  │  - placements: Map<number, PlacementEntry>   │ │ │
-│  │  │  - auxin: Auxin                               │ │ │
-│  │  │  - storagePt, logPt, keccakPt, etc.          │ │ │
-│  │  └──────────────────────────────────────────────┘ │ │
-│  │  ┌──────────────────────────────────────────────┐ │ │
-│  │  │  OperationHandler                             │ │ │
-│  │  │  - placeArith(op, inputs)                    │ │ │
-│  │  │  - placeExp(base, exponent)                  │ │ │
-│  │  └──────────────────────────────────────────────┘ │ │
-│  │  ┌──────────────────────────────────────────────┐ │ │
-│  │  │  DataLoader                                   │ │ │
-│  │  │  - loadStorage(addr, key)                    │ │ │
-│  │  │  - storeStorage(addr, key, value)            │ │ │
-│  │  │  - loadEnvInf/loadBlkInf                     │ │ │
-│  │  └──────────────────────────────────────────────┘ │ │
-│  │  ┌──────────────────────────────────────────────┐ │ │
-│  │  │  MemoryManager                                │ │ │
-│  │  │  - placeMemoryToStack(aliasInfos)            │ │ │
-│  │  └──────────────────────────────────────────────┘ │ │
-│  │  ┌──────────────────────────────────────────────┐ │ │
-│  │  │  BufferManager                                │ │ │
-│  │  │  - addWireToInBuffer(val, placementId)       │ │ │
-│  │  │  - addWireToOutBuffer(sym, val, placementId) │ │ │
-│  │  └──────────────────────────────────────────────┘ │ │
-│  └────────────────────────────────────────────────────┘ │
-│  ┌────────────────────────────────────────────────────┐ │
-│  │           Interpreter (Dual Execution)             │ │
-│  │  - Stack (EVM) / StackPt (Synthesizer)            │ │
-│  │  - Memory (EVM) / MemoryPt (Synthesizer)          │ │
-│  └────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                      EVM (Extended)                            │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │           Synthesizer (Facade)                           │ │
+│  │           [synthesizer/synthesizer.ts:19-468]            │ │
+│  │  ┌────────────────────────────────────────────────────┐ │ │
+│  │  │  StateManager                                       │ │ │
+│  │  │  [handlers/stateManager.ts]                         │ │ │
+│  │  │  - placements: Map<number, PlacementEntry>         │ │ │
+│  │  │  - cachedStorage: Map<bigint, StorageCache[]>      │ │ │
+│  │  │  - cachedOrigin: DataPt | undefined                │ │ │
+│  │  │  - callMemoryPtsStack: MemoryPts[][]               │ │ │
+│  │  └────────────────────────────────────────────────────┘ │ │
+│  │  ┌────────────────────────────────────────────────────┐ │ │
+│  │  │  ArithmeticManager                                  │ │ │
+│  │  │  [handlers/arithmeticManager.ts]                    │ │ │
+│  │  │  - placeArith(name, inPts)                          │ │ │
+│  │  │  - placeExp(inPts)                                  │ │ │
+│  │  │  - placeJubjubExp(inPts, PoI)                       │ │ │
+│  │  │  - placePoseidon(inPts)                             │ │ │
+│  │  └────────────────────────────────────────────────────┘ │ │
+│  │  ┌────────────────────────────────────────────────────┐ │ │
+│  │  │  InstructionHandler                                 │ │ │
+│  │  │  [handlers/instructionHandler.ts]                   │ │ │
+│  │  │  - synthesizerHandlers: Map<number, Handler>        │ │ │
+│  │  │  - loadStorage(key, value)                          │ │ │
+│  │  │  - getOriginAddressPt()                             │ │ │
+│  │  │  - preTasksForCalls(op, step)                       │ │ │
+│  │  └────────────────────────────────────────────────────┘ │ │
+│  │  ┌────────────────────────────────────────────────────┐ │ │
+│  │  │  MemoryManager                                      │ │ │
+│  │  │  [handlers/memoryManager.ts]                        │ │ │
+│  │  │  - placeMemoryToStack(aliasInfos)                   │ │ │
+│  │  │  - placeMemoryToMemory(aliasInfos)                  │ │ │
+│  │  │  - placeMSTORE(dataPt, truncBitSize)                │ │ │
+│  │  │  - copyMemoryPts(target, src, len, dst)             │ │ │
+│  │  └────────────────────────────────────────────────────┘ │ │
+│  │  ┌────────────────────────────────────────────────────┐ │ │
+│  │  │  BufferManager                                      │ │ │
+│  │  │  [handlers/bufferManager.ts]                        │ │ │
+│  │  │  - getReservedVariableFromBuffer(varName)           │ │ │
+│  │  │  - addReservedVariableToBufferIn(varName, ...)      │ │ │
+│  │  │  - addReservedVariableToBufferOut(varName, ...)     │ │ │
+│  │  │  - loadArbitraryStatic(value, bitSize)              │ │ │
+│  │  └────────────────────────────────────────────────────┘ │ │
+│  └──────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │         TokamakL2StateManager (for L2)                   │ │
+│  │         [TokamakL2JS/stateManager/]                      │ │
+│  │  - registeredKeys: Uint8Array[]                          │ │
+│  │  - initialMerkleTree: IMT                                │ │
+│  │  - getUserStorageKey(parts, usage)                       │ │
+│  │  - getUpdatedMerkleTreeRoot()                            │ │
+│  └──────────────────────────────────────────────────────────┘ │
+└───────────────────────────────────────────────────────────────┘
 ```
+
+**Key Changes**:
+- `OperationHandler` → `ArithmeticManager` (handles arithmetic operations)
+- `DataLoader` → Integrated into `InstructionHandler` (storage, environment data)
+- Added `TokamakL2StateManager` for L2 state channel support
+- Updated method signatures to match actual implementation
+- Added file path references for each component
 
 ---
 
@@ -451,48 +504,59 @@ if (!stackVals.every((val, index) => val === stackPtVals[index].value)) {
 
 ### 3. Synthesizer Class (Facade)
 
-**Location**: `src/tokamak/core/synthesizer/index.ts:27-181`
+**Location**: `src/synthesizer/synthesizer.ts:19-468`
 
-**Role**: Central coordinator using Facade pattern
+**Role**: Central coordinator using Facade pattern with event-driven architecture
 
 **Architecture**:
 
 ```typescript
-export class Synthesizer
-  implements ISynthesizerProvider, IDataLoaderProvider, IMemoryManagerProvider
-{
-  private _state: StateManager;                    // Line 30
-  private operationHandler: OperationHandler;      // Line 31
-  private dataLoader: DataLoader;                  // Line 32
-  private memoryManager: MemoryManager;            // Line 33
-  private bufferManager: BufferManager;            // Line 34
+export class Synthesizer implements SynthesizerInterface {
+  protected _state: StateManager;                      // Line 21
+  protected _arithmeticManager: ArithmeticManager;     // Line 22
+  protected _memoryManager: MemoryManager;             // Line 23
+  protected _bufferManager: BufferManager;             // Line 24
+  protected _instructionHandlers: InstructionHandler;  // Line 25
+  public readonly cachedOpts: SynthesizerOpts;        // Line 26
+  protected _prevInterpreterStep: InterpreterStep | null = null;  // Line 27
 
-  constructor() {
-    this._state = new StateManager();
-    this.operationHandler = new OperationHandler(this, this._state);
-    this.dataLoader = new DataLoader(this, this._state);
-    this.memoryManager = new MemoryManager(this, this._state);
-    this.bufferManager = new BufferManager(this, this._state);
+  constructor(opts: SynthesizerOpts) {
+    this.cachedOpts = opts;
+    this._state = new StateManager(this);
+    this._bufferManager = new BufferManager(this);
+    this._arithmeticManager = new ArithmeticManager(this);
+    this._memoryManager = new MemoryManager(this);
+    this._instructionHandlers = new InstructionHandler(this);
   }
 
-  public get state(): StateManager {
-    return this._state;
+  // Event handlers (synthesizer.ts:39-139)
+  private _attachSynthesizerToEVM(evm: EVM): void {
+    evm.events.on('beforeMessage', ...) → this._prepareSynthesizeTransaction()
+    evm.events.on('step', ...) → this._applySynthesizerHandler()
+    evm.events.on('afterMessage', ...) → this.finalizeStorage()
   }
 
-  // Delegate to handlers
+  // Core transaction processing
+  public async synthesizeTX(): Promise<RunTxResult> { ... }
+  public async finalizeStorage(): Promise<void> { ... }
+
+  // Delegation methods
   public placeArith(name: ArithmeticOperator, inPts: DataPt[]): DataPt[] {
-    return this.operationHandler.placeArith(name, inPts);
+    return this._arithmeticManager.placeArith(name, inPts);
   }
 
-  public loadStorage(codeAddress: string, key: bigint, value: bigint): DataPt {
-    return this.dataLoader.loadStorage(codeAddress, key, value);
+  public async loadStorage(key: bigint, value?: bigint): Promise<DataPt> {
+    return await this._instructionHandlers.loadStorage(key, value);
   }
 
   // ... more delegation methods
 }
 ```
 
-**Design**: Facade pattern delegates to specialized handlers
+**Design**: 
+- Facade pattern delegates to specialized handlers
+- Event-driven: Hooks into EVM message lifecycle (`beforeMessage`, `step`, `afterMessage`)
+- For L2: Integrates with `TokamakL2StateManager` for Merkle tree state tracking
 
 ---
 
@@ -539,13 +603,22 @@ export class StateManager {
 
 ---
 
-### 5. OperationHandler Class
+### 5. ArithmeticManager Class
 
-**Location**: `src/tokamak/core/handlers/operationHandler.ts`
+**Location**: `src/synthesizer/handlers/arithmeticManager.ts`
 
-**Role**: Create placements for arithmetic/logic operations
+**Role**: Create placements for arithmetic/logic/cryptographic operations
 
-**Key Method**:
+**Key Methods**:
+
+```typescript
+public placeArith(name: ArithmeticOperator, inPts: DataPt[]): DataPt[]
+public placeExp(inPts: DataPt[]): DataPt
+public placeJubjubExp(inPts: DataPt[], PoI: DataPt[]): DataPt[]
+public placePoseidon(inPts: DataPt[]): DataPt
+```
+
+**Example**: `placeArith()`
 
 ```typescript
 public placeArith(name: ArithmeticOperator, inPts: DataPt[]): DataPt[] {
@@ -553,22 +626,20 @@ public placeArith(name: ArithmeticOperator, inPts: DataPt[]): DataPt[] {
   const [subcircuitName, selector] = SUBCIRCUIT_MAPPING[name];
 
   // 2. Create selector DataPt
-  const selectorPt = DataPointFactory.create({
-    source: 'literal',
+  const selectorPt = DataPtFactory.create({
     value: selector,
-    // ...
+    bitSize: DEFAULT_SOURCE_BIT_SIZE,
   });
 
-  // 3. Create output DataPt
-  const outPt = DataPointFactory.create({
-    source: this.state.getNextPlacementIndex(),  // New placement ID
+  // 3. Create output DataPt with computed value
+  const outPt = DataPtFactory.create({
+    source: this.state.getNextPlacementIndex(),
     wireIndex: outWireIndex,
     value: computedValue,
-    // ...
   });
 
-  // 4. Call Synthesizer.place()
-  this.provider.place(
+  // 4. Place subcircuit in circuit
+  this.parent.place(
     subcircuitName,
     [selectorPt, ...inPts],
     [outPt],
@@ -581,42 +652,52 @@ public placeArith(name: ArithmeticOperator, inPts: DataPt[]): DataPt[] {
 
 ---
 
-### 6. DataLoader Class
+### 6. InstructionHandler Class
 
-**Location**: `src/tokamak/core/handlers/dataLoader.ts`
+**Location**: `src/synthesizer/handlers/instructionHandler.ts`
 
-**Role**: Handle external data (storage, environment, block info)
+**Role**: Map EVM opcodes to Synthesizer handlers; manage storage and environment data
+
+**Key Responsibilities**:
+
+- Create handler map for all supported opcodes
+- Handle storage operations (SLOAD, SSTORE)
+- Manage environment information (ORIGIN, CALLER, etc.)
+- Handle block information (NUMBER, TIMESTAMP, etc.)
+- Prepare call contexts for CALL-family instructions
 
 **Key Methods**:
 
 ```typescript
-public loadStorage(codeAddress: string, key: bigint, value: bigint): DataPt
-public storeStorage(codeAddress: string, key: bigint, inPt: DataPt): void
-public loadEnvInf(name: EnvInfNames, value: bigint): DataPt
-public loadBlkInf(name: BlkInfNames, value: bigint): DataPt
-public storeLog(valPts: DataPt[], topicPts: DataPt[]): void
-public loadAndStoreKeccak(inPts: DataPt[], outValue: bigint, length: bigint): DataPt
+public get synthesizerHandlers(): Map<number, SynthesizerOpHandler>
+public async loadStorage(key: bigint, value?: bigint): Promise<DataPt>
+public getOriginAddressPt(): DataPt
+public preTasksForCalls(op: SynthesizerSupportedOpcodes, step: InterpreterStep): void
 ```
 
 **Example**: `loadStorage()`
 
 ```typescript
-public loadStorage(codeAddress: string, key: bigint, value: bigint): DataPt {
-  const keyString = `${codeAddress}_${key.toString()}`;
-
-  // Check if already loaded (warm access)
-  if (this.state.storagePt.has(keyString)) {
-    return this.state.storagePt.get(keyString)!;
+public async loadStorage(key: bigint, value?: bigint): Promise<DataPt> {
+  // Check cache for warm access
+  const cached = this.parent.state.cachedStorage.get(key);
+  if (cached && cached.length > 0) {
+    return cached[cached.length - 1].valuePt;  // Return latest
   }
 
-  // Cold access: load from PRV_IN buffer
-  const inPt = DataPointFactory.create({ value, ... });
-  const outPt = this.provider.addWireToInBuffer(inPt, PRV_IN_PLACEMENT_INDEX);
-
+  // Cold access: load from state manager
+  const storedValue = value ?? await this.cachedOpts.stateManager.getStorage(...);
+  
+  // Create placement for storage load
+  const inPts = [indexPt, keyPt, valuePt];
+  const outPts = this.parent.placeArith('LoadStorage', inPts);
+  
   // Cache for future accesses
-  this.state.storagePt.set(keyString, outPt);
+  this.parent.state.cachedStorage.set(key, [{
+    indexPt, keyPt, valuePt: outPts[0], access: 'Read'
+  }]);
 
-  return outPt;
+  return outPts[0];
 }
 ```
 
@@ -714,6 +795,119 @@ export class Finalizer {
   }
 }
 ```
+
+---
+
+### 10. L2 Components (NEW)
+
+The following components are added for L2 state channel support:
+
+#### TokamakL2Tx Class
+
+**Location**: `src/TokamakL2JS/tx/TokamakL2Tx.ts`
+
+**Role**: EdDSA-signed transaction for L2 state channels
+
+**Key Features**:
+
+```typescript
+export class TokamakL2Tx extends LegacyTx {
+  // Reinterpret transaction fields for EdDSA
+  // v: Always 27n (EdDSA mode indicator)
+  // r: EdDSA randomizer (EdwardsPoint serialized)
+  // s: EdDSA signature scalar
+  
+  initSenderPubKey(key: Uint8Array): void
+  get senderPubKeyUnsafe(): Uint8Array
+  
+  override getSenderPublicKey(): Uint8Array  // Verifies EdDSA signature
+  override getSenderAddress(): Address       // Derives address from pubkey
+  override sign(privateKey: Uint8Array): TokamakL2Tx  // EdDSA signing
+  
+  getFunctionSelector(): Uint8Array
+  getFunctionInput(index: number): Uint8Array
+}
+```
+
+#### TokamakL2StateManager Class
+
+**Location**: `src/TokamakL2JS/stateManager/TokamakL2StateManager.ts`
+
+**Role**: Merkle tree-based state tracking for L2
+
+**Key Features**:
+
+```typescript
+export class TokamakL2StateManager extends MerkleStateManager {
+  private _registeredKeys: Uint8Array[] | null
+  private _initialMerkleTree: IMT | null
+  
+  public async initTokamakExtendsFromRPC(
+    rpcUrl: string,
+    opts: TokamakL2StateManagerOpts
+  ): Promise<void>
+  
+  public get registeredKeys(): Uint8Array[]  // Max 64 keys
+  public get initialMerkleTree(): IMT        // 4-ary tree, depth 4
+  
+  public getUserStorageKey(
+    parts: Array<...>,
+    usage: 'L1' | 'L2'                       // Keccak256 vs Poseidon
+  ): Uint8Array
+  
+  public async getUpdatedMerkleTreeRoot(): Promise<bigint>
+  public getMTIndex(key: bigint): number
+}
+```
+
+**Usage**: Replaces standard `RPCStateManager` for L2 transactions
+
+#### Cryptographic Utilities
+
+**Location**: `src/TokamakL2JS/crypto/index.ts`
+
+**Key Functions**:
+
+```typescript
+// Poseidon hash (replaces Keccak256 in L2 mode)
+export function poseidon(msg: Uint8Array): Uint8Array
+
+// EdDSA signature operations on JubJub curve
+export function eddsaSign_unsafe(
+  prvKey: bigint,
+  msg: Uint8Array[],
+  nonce?: Uint8Array
+): {randomizer: EdwardsPoint, signature: bigint}
+
+export function eddsaVerify(
+  msg: Uint8Array[],
+  pubKey: EdwardsPoint,
+  randomizer: EdwardsPoint,
+  signature: bigint
+): boolean
+
+// Public key recovery (used by EVM ecrecover replacement)
+export function getEddsaPublicKey(
+  msgHash: Uint8Array,
+  v: bigint,
+  r: Uint8Array,
+  s: Uint8Array
+): Uint8Array
+```
+
+**Custom Crypto Configuration**:
+
+```typescript
+const common = new Common({
+  chain: Mainnet,
+  customCrypto: {
+    keccak256: poseidon,      // Replace hash function
+    ecrecover: getEddsaPublicKey  // Replace signature recovery
+  }
+})
+```
+
+This allows L2 transactions to use circuit-friendly cryptography while maintaining compatibility with EthereumJS APIs.
 
 ---
 
