@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synthesizer-class-structure</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+    h2 { color: #34495e; margin-top: 30px; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; }
+    h3 { color: #7f8c8d; margin-top: 20px; }
+    code { font-family: 'Monaco', 'Courier New', monospace; font-size: 0.9em; }
+    pre { line-height: 1.4; }
+    a { color: #3498db; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { display: block; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px; }
+    ul { margin: 15px 0; padding-left: 30px; }
+    li { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>Synthesizer: Class Structure</h1>
+
+<p>This document provides detailed information about <a href="synthesizer-terminology.md#synthesizer">Synthesizer</a>'s class structure, relationships, and implementation details.</p>
+
+<p>---</p>
+
+<h2>Synthesizer Class Hierarchy</h2>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>┌─────────────────────────────────────────────────────────┐
+│                      Synthesizer                         │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │  StateManager                                       │ │
+│  │  - placements: Map&lt;number, PlacementEntry&gt;         │ │
+│  │  - auxin: Auxin (auxiliary inputs)                 │ │
+│  │  - storagePt, logPt, keccakPt, etc.                │ │
+│  │  - placementIndex: number                           │ │
+│  └────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │  OperationHandler                                   │ │
+│  │  - placeArith(op, inputs)                          │ │
+│  │  - placeExp(base, exponent)                        │ │
+│  └────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │  DataLoader                                         │ │
+│  │  - loadStorage(addr, key)                          │ │
+│  │  - storeStorage(addr, key, value)                  │ │
+│  │  - loadEnvInf/loadBlkInf                           │ │
+│  └────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │  MemoryManager                                      │ │
+│  │  - placeMemoryToStack(aliasInfos)                  │ │
+│  └────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │  BufferManager                                      │ │
+│  │  - addWireToInBuffer(val, placementId)             │ │
+│  │  - addWireToOutBuffer(sym, val, placementId)       │ │
+│  └────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+</code></pre>
+
+<p>---</p>
+
+<h2>Detailed Class Breakdown</h2>
+
+<h3>1. Synthesizer Class</h3>
+
+<p><strong>Location</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">src/tokamak/core/synthesizer/index.ts:27-181</code></p>
+
+<p><strong>Role</strong>: Central coordinator using Facade pattern</p>
+
+<p><strong>Architecture</strong>:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>export class Synthesizer
+  implements ISynthesizerProvider, IDataLoaderProvider, IMemoryManagerProvider
+{
+  private _state: StateManager;                    // Line 30
+  private operationHandler: OperationHandler;      // Line 31
+  private dataLoader: DataLoader;                  // Line 32
+  private memoryManager: MemoryManager;            // Line 33
+  private bufferManager: BufferManager;            // Line 34
+
+<p>  constructor() {<br>    this._state = new StateManager();<br>    this.operationHandler = new OperationHandler(this, this._state);<br>    this.dataLoader = new DataLoader(this, this._state);<br>    this.memoryManager = new MemoryManager(this, this._state);<br>    this.bufferManager = new BufferManager(this, this._state);<br>  }</p>
+
+<p>  public get state(): StateManager {<br>    return this._state;<br>  }</p>
+
+<p>  // Delegate to handlers<br>  public placeArith(name: ArithmeticOperator, inPts: DataPt[]): DataPt[] {<br>    return this.operationHandler.placeArith(name, inPts);<br>  }</p>
+
+<p>  public loadStorage(codeAddress: string, key: bigint, value: bigint): DataPt {<br>    return this.dataLoader.loadStorage(codeAddress, key, value);<br>  }</p>
+
+<p>  // ... more delegation methods<br>}<br></code></pre></p>
+
+<p><strong>Design</strong>: Facade pattern delegates to specialized handlers</p>
+
+<p>---</p>
+
+<h3>2. StateManager Class</h3>
+
+<p><strong>Location</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">src/tokamak/core/handlers/stateManager.ts:24-102</code></p>
+
+<p><strong>Role</strong>: Central state repository</p>
+
+<p><strong>Key Data Structures</strong>:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>export class StateManager {
+  public placements!: Placements;              // All placement instances
+  public auxin!: Auxin;                        // Auxiliary inputs
+  public envInf!: Map&lt;string, {...}&gt;;          // Environment info (CALLER, etc.)
+  public blkInf!: Map&lt;string, {...}&gt;;          // Block info (NUMBER, etc.)
+  public storagePt!: Map&lt;string, DataPt&gt;;      // Storage symbols
+  public logPt!: {...}[];                      // Log data
+  public keccakPt!: {...}[];                   // Keccak inputs/outputs
+  public TStoragePt!: Map&lt;...&gt;;                // Transient storage
+  public placementIndex!: number;              // Sequential counter
+  public subcircuitInfoByName!: SubcircuitInfoByName;
+  public subcircuitNames!: SubcircuitNames[];
+
+<p>  constructor() {<br>    this._initializeState();                   // Reset all state<br>    this._initializeSubcircuitInfo();          // Load subcircuit metadata<br>    this._initializePlacements();              // Create buffer placements (0-3)<br>    this.placementIndex = INITIAL_PLACEMENT_INDEX;  // Start from 4<br>  }</p>
+
+<p>  public getNextPlacementIndex(): number {<br>    return this.placementIndex++;              // Atomic increment<br>  }<br>}<br></code></pre></p>
+
+<p><strong>Key Points</strong>:</p>
+
+<ul><li>Single source of truth for all Synthesizer state</li>
+<li><a href="synthesizer-terminology.md#placement">Placements</a> 0-3 reserved for <a href="synthesizer-terminology.md#buffer-placements">buffers</a></li>
+<li>Placement IDs start from 4</li></ul>
+
+<p>---</p>
+
+<h3>3. OperationHandler Class</h3>
+
+<p><strong>Location</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">src/tokamak/core/handlers/operationHandler.ts</code></p>
+
+<p><strong>Role</strong>: Create <a href="synthesizer-terminology.md#placement">placements</a> for arithmetic/logic operations</p>
+
+<p><strong>Key Method</strong>:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>public placeArith(name: ArithmeticOperator, inPts: DataPt[]): DataPt[] {
+  // 1. Map operation to subcircuit
+  const [subcircuitName, selector] = SUBCIRCUIT_MAPPING[name];
+
+<p>  // 2. Create selector DataPt<br>  const selectorPt = DataPointFactory.create({<br>    source: &#039;literal&#039;,<br>    value: selector,<br>    // ...<br>  });</p>
+
+<p>  // 3. Create output DataPt<br>  const outPt = DataPointFactory.create({<br>    source: this.state.getNextPlacementIndex(),  // New placement ID<br>    wireIndex: outWireIndex,<br>    value: computedValue,<br>    // ...<br>  });</p>
+
+<p>  // 4. Call Synthesizer.place()<br>  this.provider.place(<br>    subcircuitName,<br>    [selectorPt, ...inPts],<br>    [outPt],<br>    name<br>  );</p>
+
+<p>  return [outPt];<br>}<br></code></pre></p>
+
+<p>---</p>
+
+<h3>4. DataLoader Class</h3>
+
+<p><strong>Location</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">src/tokamak/core/handlers/dataLoader.ts</code></p>
+
+<p><strong>Role</strong>: Handle external data (storage, environment, block info)</p>
+
+<p><strong>Key Methods</strong>:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>public loadStorage(codeAddress: string, key: bigint, value: bigint): DataPt
+public storeStorage(codeAddress: string, key: bigint, inPt: DataPt): void
+public loadEnvInf(name: EnvInfNames, value: bigint): DataPt
+public loadBlkInf(name: BlkInfNames, value: bigint): DataPt
+public storeLog(valPts: DataPt[], topicPts: DataPt[]): void
+public loadAndStoreKeccak(inPts: DataPt[], outValue: bigint, length: bigint): DataPt
+</code></pre>
+
+<p><strong>Example</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">loadStorage()</code></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>public loadStorage(codeAddress: string, key: bigint, value: bigint): DataPt {
+  const keyString = <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">${codeAddress}_${key.toString()}</code>;
+
+<p>  // Check if already loaded (warm access)<br>  if (this.state.storagePt.has(keyString)) {<br>    return this.state.storagePt.get(keyString)!;<br>  }</p>
+
+<p>  // Cold access: load from PRV_IN buffer<br>  const inPt = DataPointFactory.create({ value, ... });<br>  const outPt = this.provider.addWireToInBuffer(inPt, PRV_IN_PLACEMENT_INDEX);</p>
+
+<p>  // Cache for future accesses<br>  this.state.storagePt.set(keyString, outPt);</p>
+
+<p>  return outPt;<br>}<br></code></pre></p>
+
+<p>---</p>
+
+<h3>5. MemoryManager Class</h3>
+
+<p><strong>Location</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">src/tokamak/core/handlers/memoryManager.ts</code></p>
+
+<p><strong>Role</strong>: Resolve <a href="synthesizer-terminology.md#data-aliasing">memory aliasing</a></p>
+
+<p><strong>Key Method</strong>:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>public placeMemoryToStack(dataAliasInfos: DataAliasInfos): DataPt {
+  // Generate subcircuits to reconstruct overlapping memory
+  // Uses SHR, SHL, AND, OR to combine fragments
+  // Returns reconstructed symbol
+}
+</code></pre>
+
+<p><strong>Used by</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">MLOAD</code>, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">CALLDATACOPY</code>, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">KECCAK256</code>, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">LOG</code>, etc.</p>
+
+<p>---</p>
+
+<h3>6. BufferManager Class</h3>
+
+<p><strong>Location</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">src/tokamak/core/handlers/bufferManager.ts</code></p>
+
+<p><strong>Role</strong>: Manage LOAD and RETURN <a href="synthesizer-terminology.md#buffer-placements">buffer placements</a></p>
+
+<p><strong>Key Methods</strong>:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>public addWireToInBuffer(inPt: DataPt, placementId: number): DataPt {
+  // Placement 0 (PUB_IN) or 2 (PRV_IN)
+  // External value → Symbol conversion
+
+<p>  const outPt = DataPointFactory.create({<br>    source: placementId,<br>    wireIndex: nextIndex,<br>    value: inPt.value,<br>    // ...<br>  });</p>
+
+<p>  this.state.placements.get(placementId)!.inPts.push(inPt);<br>  this.state.placements.get(placementId)!.outPts.push(outPt);</p>
+
+<p>  return outPt;  // Symbol for circuit<br>}</p>
+
+<p>public addWireToOutBuffer(inPt: DataPt, outPt: DataPt, placementId: number): void {<br>  // Placement 1 (PUB_OUT) or 3 (PRV_OUT)<br>  // Symbol → External value conversion</p>
+
+<p>  this.state.placements.get(placementId)!.inPts.push(inPt);<br>  this.state.placements.get(placementId)!.outPts.push(outPt);<br>}<br></code></pre></p>
+
+<p>---</p>
+
+<h3>7. Finalizer Class</h3>
+
+<p><strong>Location</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">src/tokamak/core/finalizer/index.ts:5-26</code></p>
+
+<p><strong>Role</strong>: Generate output files</p>
+
+<p><strong>Execution Flow</strong>:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>export class Finalizer {
+  private state: StateManager;
+
+<p>  constructor(stateManager: StateManager) {<br>    this.state = stateManager;<br>  }</p>
+
+<p>  public async exec(_path?: string, writeToFS: boolean = true): Promise&lt;Permutation&gt; {<br>    // 1. Refactor placements (optimize wire sizes)<br>    const placementRefactor = new PlacementRefactor(this.state);<br>    const refactoriedPlacements = placementRefactor.refactor();</p>
+
+<p>    // 2. Generate permutation and witness<br>    const permutation = new Permutation(refactoriedPlacements, _path);<br>    permutation.placementVariables = await permutation.outputPlacementVariables(<br>      refactoriedPlacements,<br>      _path,<br>    );</p>
+
+<p>    // 3. Write permutation.json<br>    permutation.outputPermutation(_path);</p>
+
+<p>    return permutation;<br>  }<br>}<br></code></pre><br></p>
+  
+  <hr style="margin-top: 60px; border: none; border-top: 1px solid #ddd;">
+  <p style="color: #7f8c8d; font-size: 0.9em;">
+    <em>이 문서는 <a href="https://YOUR-USERNAME.github.io/tokamak-zk-evm-docs">Tokamak zk-EVM Documentation</a>에서 변환되었습니다.</em>
+  </p>
+</body>
+</html>

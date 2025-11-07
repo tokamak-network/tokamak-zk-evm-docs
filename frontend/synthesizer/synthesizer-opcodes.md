@@ -1,25 +1,14 @@
 # Synthesizer: Opcode Reference
 
-This document describes how the Tokamak Synthesizer handles each EVM opcode, comparing standard EVM behavior with circuit generation.
+This document describes how [Synthesizer](synthesizer-terminology.md#synthesizer) handles each EVM opcode, comparing standard EVM behavior with circuit generation.
 
 ---
 
-## 📋 Table of Contents
+## On This Page
 
 - [Overview](#overview)
-  - Standard EVM vs Synthesizer
-  - Key Differences
-  - Subcircuit Types
 - [All Opcodes](#all-opcodes)
-  - Quick reference table with all 31+ implemented opcodes
 - [Detailed Opcode Reference](#0x01-add)
-  - Individual opcode explanations with circuit generation details
-- [Cryptographic Operations (L2 State Channels)](#cryptographic-operations-l2-state-channels)
-  - Poseidon Hash
-  - EdDSA Signature Verification
-  - JubJub Scalar Multiplication
-  - Cryptographic Constants
-  - Integration with Event Hooks
 - [Circuit Complexity Summary](#circuit-complexity-summary)
 - [Related Resources](#related-resources)
 - [Appendix: Subcircuit Mapping Table](#appendix-subcircuit-mapping-table)
@@ -49,7 +38,7 @@ This document describes how the Tokamak Synthesizer handles each EVM opcode, com
 
 ### Subcircuit Types
 
-The Synthesizer uses pre-compiled subcircuits from the [QAP Compiler](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler):
+The Synthesizer uses pre-compiled [subcircuits](synthesizer-terminology.md#subcircuit) from the [QAP Compiler](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler):
 
 - **ALU1**: Basic arithmetic (ADD, MUL, SUB, EQ, ISZERO, NOT)
 - **ALU2**: Modular arithmetic (DIV, SDIV, MOD, SMOD, ADDMOD, MULMOD)
@@ -118,7 +107,7 @@ synthesizerArith('ADD', [a.value, b.value], result, runState);
 
 #### Circuit Generation
 
-- **Subcircuit**: `ALU1` | **Selector**: `1n << 1n`
+- **[Subcircuit](synthesizer-terminology.md#subcircuit)**: `ALU1` | **[Selector](synthesizer-terminology.md#selector)**: `1n << 1n`
 - **Constraints**: 803 (entire ALU1 subcircuit, 630 non-linear + 173 linear)
 
 **Source**:
@@ -251,7 +240,7 @@ EXP uses a two-phase approach implemented in [`placeExp()`](https://github.com/t
 - **SubEXP**: Repeated squaring and conditional multiplication
 - Lines 36-41: Loop through each bit of exponent
 - Each iteration: `synthesizer.placeArith('SubEXP', _inPts)`
-- SubEXP per iteration: 803 constraints (entire ALU1 subcircuit)
+- SubEXP per iteration: 803 constraints (entire ALU1 [subcircuit](synthesizer-terminology.md#subcircuit))
 - Number of iterations: bit length of exponent (max 256)
 
 **Why Two Subcircuits?**
@@ -336,7 +325,7 @@ synthesizerArith('LT', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:240-246`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L240-L246) | [`handlers.ts:167-175`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L167-L175)
-- Circuit: [`ALU4_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU4_circuit.circom) | [`LessThan256 (compare_safe.circom)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom)
+- Circuit: [`ALU4 (alu_safe.circom:350-354)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L350-L354) | [`LessThan256 (compare_safe.circom:6-19)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L6-L19)
 
 ---
 
@@ -356,7 +345,7 @@ synthesizerArith('LT', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:248-254`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L248-L254) | [`handlers.ts:177-185`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L177-L185)
-- Circuit: [`ALU4_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU4_circuit.circom) | [`GreaterThan256 (compare_safe.circom)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom)
+- Circuit: [`ALU4 (alu_safe.circom:356-359)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L356-L359) | [`GreaterThan256 (compare_safe.circom:35-39)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L35-L39)
 
 ---
 
@@ -376,7 +365,7 @@ synthesizerArith('LT', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:256-262`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L256-L262) | [`handlers.ts:187-195`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L187-L195)
-- Circuit: [`ALU4_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU4_circuit.circom) | [`SignedLessThan256 (compare_safe.circom)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom)
+- Circuit: [`ALU4 (alu_safe.circom:361-395)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L361-L395) | [`SignedLessThan256 (compare_safe.circom:41-74)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L41-L74)
 
 ---
 
@@ -396,7 +385,7 @@ synthesizerArith('LT', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:264-270`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L264-L270) | [`handlers.ts:197-205`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L197-L205)
-- Circuit: [`ALU4_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU4_circuit.circom) | [`SignedGreaterThan256 (compare_safe.circom)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom)
+- Circuit: [`ALU4 (alu_safe.circom:397-400)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L397-L400) | [`SignedGreaterThan256 (compare_safe.circom:76-80)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L76-L80)
 
 ---
 
@@ -427,7 +416,7 @@ await synthesizerArith('EQ', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:272-278`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L272-L278) | [`handlers.ts:207-215`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L207-L215)
-- Circuit: [`ALU1 (alu_safe.circom:80-87)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L80-L87) | [`IsEqual256 (compare_safe.circom)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom)
+- Circuit: [`ALU1 (alu_safe.circom:80-87)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L80-L87) | [`IsEqual256 (compare_safe.circom:92-99)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L92-L99)
 
 ---
 
@@ -447,7 +436,7 @@ await synthesizerArith('EQ', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:280-286`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L280-L286) | [`handlers.ts:217-225`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L217-L225)
-- Circuit: [`ALU1 (alu_safe.circom:89-95)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L89-L95) | [`IsZero256 (compare_safe.circom)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom)
+- Circuit: [`ALU1 (alu_safe.circom:89-95)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L89-L95) | [`IsZero256 (compare_safe.circom:82-90)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/compare_safe.circom#L82-L90)
 
 ---
 
@@ -475,7 +464,7 @@ await synthesizerArith('AND', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:288-294`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L288-L294) | [`handlers.ts:227-234`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L227-L234)
-- Circuit: [`AND_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/AND_circuit.circom) | [`ALU_bitwise (alu_safe.circom:870-894)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L870-L894)
+- Circuit: [`ALU_bitwise (alu_safe.circom:870-880)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L870-L880) | [`And256 (bitwise_safe.circom:21-26)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/bitwise_safe.circom#L21-L26)
 
 ---
 
@@ -495,7 +484,7 @@ await synthesizerArith('AND', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:296-302`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L296-L302) | [`handlers.ts:237-244`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L237-L244)
-- Circuit: [`OR_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/OR_circuit.circom) | [`ALU_bitwise (alu_safe.circom:895-919)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L895-L919)
+- Circuit: [`ALU_bitwise (alu_safe.circom:882-892)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L882-L892) | [`Or256 (bitwise_safe.circom:14-19)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/bitwise_safe.circom#L14-L19)
 
 ---
 
@@ -515,7 +504,7 @@ await synthesizerArith('AND', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:304-310`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L304-L310) | [`handlers.ts:247-254`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L247-L254)
-- Circuit: [`XOR_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/XOR_circuit.circom) | [`ALU_bitwise (alu_safe.circom:920-944)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L920-L944)
+- Circuit: [`ALU_bitwise (alu_safe.circom:894-904)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L894-L904) | [`Xor256 (bitwise_safe.circom:7-12)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/bitwise_safe.circom#L7-L12)
 
 ---
 
@@ -535,7 +524,7 @@ await synthesizerArith('AND', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:312-318`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L312-L318) | [`handlers.ts:257-265`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L257-L265)
-- Circuit: [`ALU1 (alu_safe.circom:98-104)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L98-L104) | [`Not256_unsafe (arithmetic_unsafe_type1.circom)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/arithmetic_unsafe_type1.circom)
+- Circuit: [`ALU1 (alu_safe.circom:98-104)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L98-L104) | [`Not256_unsafe (arithmetic_unsafe_type1.circom:95-100)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/arithmetic_unsafe_type1.circom#L95-L100)
 
 ---
 
@@ -555,7 +544,7 @@ await synthesizerArith('AND', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:320-327`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L320-L327) | [`handlers.ts:268-276`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L268-L276)
-- Circuit: [`ALU5_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU5_circuit.circom)
+- Circuit: [`ALU5 (alu_safe.circom:444-453)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L444-L453)
 
 ---
 
@@ -583,7 +572,7 @@ await synthesizerArith('SHL', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:329-335`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L329-L335) | [`handlers.ts:278-286`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L278-L286)
-- Circuit: [`ALU3_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU3_circuit.circom)
+- Circuit: [`ALU3 (alu_safe.circom:266-276)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L266-L276)
 
 ---
 
@@ -603,7 +592,7 @@ await synthesizerArith('SHL', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:337-343`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L337-L343) | [`handlers.ts:288-296`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L288-L296)
-- Circuit: [`ALU3_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU3_circuit.circom)
+- Circuit: [`ALU3 (alu_safe.circom:278-287)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L278-L287)
 
 ---
 
@@ -623,7 +612,7 @@ await synthesizerArith('SHL', [a.value, b.value], result, runState);
 **Source**:
 
 - Synthesizer: [`functions.ts:345-351`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/functions.ts#L345-L351) | [`handlers.ts:298-306`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/opcodes/synthesizer/handlers.ts#L298-L306)
-- Circuit: [`ALU3_circuit.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/subcircuits/circom/ALU3_circuit.circom)
+- Circuit: [`ALU3 (alu_safe.circom:289-301)`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/qap-compiler/templates/256bit/alu_safe.circom#L289-L301)
 
 ---
 
@@ -631,7 +620,7 @@ await synthesizerArith('SHL', [a.value, b.value], result, runState);
 
 ### 0x20: KECCAK256
 
-**Constraints**: ~5000
+**Constraints**: 1028
 
 **Stack**: `offset, size` → `keccak256(memory[offset:offset+size])`
 
@@ -660,13 +649,13 @@ if (length !== BIGINT_0) {
 
 #### Circuit Generation
 
-- **Processing**: 🌐 **External** (hash computed outside circuit)
+- **Processing**: **External** (hash computed outside circuit)
 - **Tracking**: Input data symbols recorded in circuit
 - **Reason**: Keccak256 is too expensive to compute in-circuit (~100,000 constraints per hash)
 - **Approach**:
-  1. Track input symbols (DataPts from memory)
+  1. Track input symbols ([DataPts](synthesizer-terminology.md#datapt-data-point) from memory)
   2. Compute hash externally (standard Keccak256)
-  3. Load result as auxiliary input
+  3. Load result as [auxiliary input](synthesizer-terminology.md#auxiliary-input-auxin)
   4. Circuit verifies correct inputs were hashed (not the hash itself)
 
 #### Why External?
@@ -700,11 +689,11 @@ await synthesizerEnvInf('ADDRESS', runState);
 
 #### Circuit Generation
 
-- **Buffer**: `PUB_IN` (Placement 0)
+- **[Buffer](synthesizer-terminology.md#buffer-placements)**: [`PUB_IN`](synthesizer-terminology.md#pub-in-and-pub-out) (Placement 0)
 - **Flow**:
   1. External value (contract address) → PUB_IN buffer
-  2. Buffer creates DataPt symbol
-  3. Symbol pushed to StackPt
+  2. Buffer creates [DataPt](synthesizer-terminology.md#datapt-data-point) symbol
+  3. Symbol pushed to [StackPt](synthesizer-terminology.md#stackpt)
 
 **Source**:
 
@@ -781,8 +770,8 @@ if (dataLength.value !== BIGINT_0) {
 - **Type**: Memory Operation + Environmental Information
 - **Processing**:
   1. Load calldata from PUB_IN buffer → DataPt
-  2. Write DataPt to MemoryPt (tracking memory state)
-  3. MemoryPt handles data aliasing if memory overlaps
+  2. Write DataPt to [MemoryPt](synthesizer-terminology.md#memorypt) (tracking memory state)
+  3. MemoryPt handles [data aliasing](synthesizer-terminology.md#data-aliasing) if memory overlaps
 - **Constraints**: ~100 (buffer) + ~5,000 per memory word (if memory circuits needed)
 
 #### Memory Aliasing Handling
@@ -867,7 +856,7 @@ stackPt.pop(); // Remove top DataPt from symbol stack
 
 ### 0x51: MLOAD
 
-**Constraints**: ~5000
+**Constraints**: 1028
 
 **Stack**: `offset` → `memory[offset:offset+32]`
 
@@ -893,7 +882,7 @@ if (dataAliasInfos.length > 0) {
 
 - **Type**: Memory Operation with data aliasing resolution
 - **Subcircuits**: DecToBit, Accumulator, Bitwise (AND, OR)
-- **Constraints**: ~5,000 per overlapping DataPt
+- **Constraints**: ~1028 per overlapping DataPt
 
 #### Data Aliasing Example
 
@@ -921,7 +910,7 @@ result = (dataPt1 & mask1) | ((dataPt2 & mask2) << 128)
 
 ### 0x52: MSTORE
 
-**Constraints**: ~5000
+**Constraints**: 1028
 
 **Stack**: `offset, value` → `-` (writes 32 bytes to memory)
 
@@ -985,7 +974,7 @@ stackPt.push(valuePt);
 
 #### Circuit Generation
 
-- **Buffer**: `PRV_IN` (Placement 2) - Storage is private by default
+- **Buffer**: [`PRV_IN`](synthesizer-terminology.md#prv-in-and-prv-out) (Placement 2) - Storage is private by default
 - **Processing**:
   1. Read storage value from stateManager (external)
   2. Load value as DataPt via PRV_IN buffer
@@ -1025,7 +1014,7 @@ synthesizer.storePrvOut(address.toString(), 'Storage', valuePt, key);
 
 #### Circuit Generation
 
-- **Buffer**: `PRV_OUT` (Placement 3) - Private outputs
+- **Buffer**: [`PRV_OUT`](synthesizer-terminology.md#prv-in-and-prv-out) (Placement 3) - Private outputs
 - **Processing**:
   1. Write DataPt symbol to PRV_OUT buffer
   2. Actual storage update happens externally
@@ -1060,7 +1049,7 @@ stackPt.push(valuePt);
 
 #### Why loadAuxin?
 
-PUSH values are hardcoded in bytecode (not from environment/storage), so they're treated as auxiliary inputs:
+PUSH values are hardcoded in bytecode (not from environment/storage), so they're treated as [auxiliary inputs](synthesizer-terminology.md#auxiliary-input-auxin):
 
 ```typescript
 PUSH1 0x05        → synthesizer.loadAuxin(5, 1)
@@ -1201,12 +1190,12 @@ if (lengthPt.value !== BIGINT_0) {
 #### Circuit Generation
 
 - **Type**: System Operation
-- **Buffer**: `PUB_OUT` (Placement 1) - Return data is public
+- **Buffer**: [`PUB_OUT`](synthesizer-terminology.md#pub-in-and-pub-out) (Placement 1) - Return data is public
 - **Processing**:
   1. Load return data from MemoryPt (with aliasing resolution)
   2. Generate circuits to reconstruct data
   3. Write symbols to PUB_OUT buffer
-- **Constraints**: ~5,000 per memory segment
+- **Constraints**: 1028 per memory segment
 
 **Source**:
 
@@ -1261,329 +1250,6 @@ The Tokamak zk-EVM is designed specifically for Layer 2 state channel applicatio
 
 ---
 
-## Cryptographic Operations (L2 State Channels)
-
-L2 state channels introduce specialized cryptographic operations for EdDSA signature verification, Poseidon hashing, and Merkle tree management. These operations are not standard EVM opcodes but are **custom subcircuits** used by the Synthesizer during event-driven hooks.
-
-### Overview
-
-| Operation         | Purpose                                 | Subcircuit            | Input Wires | Output Wires | Phase         |
-| ----------------- | --------------------------------------- | --------------------- | ----------- | ------------ | ------------- |
-| **Poseidon Hash** | Hash field elements (Merkle tree)       | `PoseidonCircuit2/4/9`| 2, 4, or 9  | 1            | beforeMessage, afterMessage |
-| **EdDSA Verify**  | Verify EdDSA signature                  | `EddsaVerify`         | 6           | 1 (bool)     | beforeMessage |
-| **JubJub Exp**    | JubJub scalar multiplication            | `JubjubExp`           | 3           | 2 (point)    | beforeMessage |
-
-### Poseidon Hash
-
-**Purpose**: Efficient hash function for zero-knowledge circuits
-
-**Subcircuits**:
-- `PoseidonCircuit2`: Hash 2 field elements (leaf hash)
-- `PoseidonCircuit4`: Hash 4 field elements (Merkle parent)
-- `PoseidonCircuit9`: Hash 9 field elements (transaction message)
-
-#### Standard EVM Behavior
-
-Not applicable (custom operation for L2).
-
-#### Synthesizer Behavior
-
-```typescript
-// Leaf hash: H(key, value)
-const leafHashPt = synthesizer.placeCrypto(
-  'PoseidonCircuit2',
-  [keyPt, valuePt]
-);
-
-// Parent hash: H(child0, child1, child2, child3)
-const parentHashPt = synthesizer.placeCrypto(
-  'PoseidonCircuit4',
-  [child0Pt, child1Pt, child2Pt, child3Pt]
-);
-
-// Transaction message hash
-const messageHashPt = synthesizer.placeCrypto(
-  'PoseidonCircuit9',
-  [noncePt, addressPt, selectorPt, ...inputPts]
-);
-```
-
-#### Circuit Details
-
-**Poseidon Properties**:
-- **Field**: BLS12-381 scalar field (R_MOD = 0x73ed...0001)
-- **Efficiency**: ~10x cheaper than Keccak256 in circuits
-- **Security**: Designed for ZK-SNARK-friendly hashing
-
-**Usage in Synthesizer**:
-1. **Leaf Hash** (Merkle tree): Combine storage key + value
-2. **Parent Hash** (Merkle tree): Combine 4 child hashes (4-ary tree)
-3. **Message Hash** (EdDSA): Hash transaction data before signing
-4. **Null Hashes**: Empty Merkle tree nodes (`NULL_POSEIDON_LEVEL0~3`)
-
-**Constraints**: Varies by arity
-- PoseidonCircuit2: ~150 constraints
-- PoseidonCircuit4: ~200 constraints
-- PoseidonCircuit9: ~350 constraints
-
-#### Example: Merkle Tree Root Computation
-
-```typescript
-// Step 1: Hash all leaves (key, value pairs)
-const leafHashPts = [];
-for (const [key, value] of registeredStorage) {
-  const leafPt = synthesizer.placeCrypto(
-    'PoseidonCircuit2',
-    [
-      synthesizer.loadAuxin(key),
-      synthesizer.loadAuxin(value)
-    ]
-  );
-  leafHashPts.push(leafPt);
-}
-
-// Step 2: Build level 1 (16 parent nodes from 64 leaves)
-const level1Pts = [];
-for (let i = 0; i < 16; i++) {
-  const children = [
-    leafHashPts[i * 4 + 0] || NULL_POSEIDON_LEVEL0,
-    leafHashPts[i * 4 + 1] || NULL_POSEIDON_LEVEL0,
-    leafHashPts[i * 4 + 2] || NULL_POSEIDON_LEVEL0,
-    leafHashPts[i * 4 + 3] || NULL_POSEIDON_LEVEL0
-  ];
-  
-  level1Pts.push(
-    synthesizer.placeCrypto('PoseidonCircuit4', children)
-  );
-}
-
-// Step 3: Build level 2 (4 nodes from 16)
-const level2Pts = [];
-for (let i = 0; i < 4; i++) {
-  level2Pts.push(
-    synthesizer.placeCrypto('PoseidonCircuit4', level1Pts.slice(i * 4, (i + 1) * 4))
-  );
-}
-
-// Step 4: Compute root (1 node from 4)
-const rootPt = synthesizer.placeCrypto('PoseidonCircuit4', level2Pts);
-
-// Step 5: Export as public output
-synthesizer.addReservedVariableToBufferOut('RES_MERKLE_ROOT', rootPt, true);
-```
-
-**Source**: [`packages/frontend/synthesizer/src/TokamakL2JS/crypto/index.ts`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/TokamakL2JS/crypto/index.ts#L10-L35)
-
----
-
-### EdDSA Signature Verification
-
-**Purpose**: Verify EdDSA signatures on JubJub curve
-
-**Subcircuit**: `EddsaVerify`
-
-#### Standard EVM Behavior
-
-Not applicable (custom operation for L2, replaces ECDSA verification).
-
-#### Synthesizer Behavior
-
-```typescript
-// Step 1: Load message hash (from Poseidon)
-const messageHashPt = synthesizer.placeCrypto(
-  'PoseidonCircuit9',
-  messagePts
-);
-
-// Step 2: Load public key (from PUBLIC_IN buffer)
-const publicKeyXPt = synthesizer.getReservedVariableFromBuffer('EDDSA_PUBLIC_KEY_X');
-const publicKeyYPt = synthesizer.getReservedVariableFromBuffer('EDDSA_PUBLIC_KEY_Y');
-
-// Step 3: Load signature components (from PRIVATE_IN buffer)
-const randomizerXPt = synthesizer.getReservedVariableFromBuffer('EDDSA_RANDOMIZER_X');
-const randomizerYPt = synthesizer.getReservedVariableFromBuffer('EDDSA_RANDOMIZER_Y');
-const signaturePt = synthesizer.getReservedVariableFromBuffer('EDDSA_SIGNATURE');
-
-// Step 4: Verify signature
-const isValidPt = synthesizer.placeCrypto(
-  'EddsaVerify',
-  [
-    messageHashPt,
-    publicKeyXPt, publicKeyYPt,
-    randomizerXPt, randomizerYPt,
-    signaturePt
-  ]
-);
-
-// Step 5: Assert isValidPt == 1 (signature must be valid)
-const resultPt = synthesizer.placeArith('SUB', [isValidPt, synthesizer.loadAuxin(1n)]);
-// If resultPt != 0, circuit fails
-```
-
-#### Circuit Details
-
-**EdDSA on JubJub Curve**:
-- **Curve**: JubJub (Edwards curve over BLS12-381 scalar field)
-- **Equation**: \( ax^2 + y^2 = 1 + dx^2y^2 \)
-- **Parameters**:
-  - \( a = -1 \)
-  - \( d = -(10240/10241) \mod R\_MOD \)
-- **Base Point**: Hardcoded in circuit (JUBJUB_BASE_X, JUBJUB_BASE_Y)
-
-**Signature Components**:
-1. **Public Key**: \( (P_x, P_y) \) - Point on JubJub curve
-2. **Randomizer**: \( R = (R_x, R_y) \) - Random point
-3. **Signature**: \( s \) - Scalar (255-bit)
-
-**Verification Formula**:
-```
-s * G = R + H(R, P, M) * P
-```
-Where:
-- \( G \): Base point
-- \( H \): Poseidon hash
-- \( M \): Message hash
-
-**Constraints**: ~5,000 constraints (includes JubJub scalar multiplication)
-
-**Execution Phase**: `beforeMessage` (before EVM execution)
-
-**Source**: [`packages/frontend/synthesizer/src/synthesizer/handlers/instructionHandler.ts:389-450`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/synthesizer/handlers/instructionHandler.ts#L389-L450)
-
----
-
-### JubJub Scalar Multiplication
-
-**Purpose**: Multiply a point on JubJub curve by a scalar
-
-**Subcircuit**: `JubjubExp`
-
-#### Standard EVM Behavior
-
-Not applicable (custom cryptographic operation for L2).
-
-#### Synthesizer Behavior
-
-```typescript
-// Compute s * G (scalar multiplication)
-const [resultXPt, resultYPt] = synthesizer.placeCrypto(
-  'JubjubExp',
-  [
-    scalarPt,           // Scalar (255-bit)
-    basePointXPt,       // Base point X
-    basePointYPt        // Base point Y
-  ]
-);
-
-// Used internally by EddsaVerify
-```
-
-#### Circuit Details
-
-**JubJub Curve Properties**:
-- **Group Order**: \( r = 2^{252} + 27742317777372353535851937790883648493 \)
-- **Cofactor**: 8
-- **Base Point**: Hardcoded (JUBJUB_BASE_X, JUBJUB_BASE_Y)
-
-**Algorithm**: Double-and-add (255 iterations)
-
-**Constraints**: ~3,000 constraints (255 doublings + 128 additions on average)
-
-**Usage**:
-- Internal to `EddsaVerify` subcircuit
-- Computes \( s \cdot G \) and \( H(R, P, M) \cdot P \)
-
-**Source**: [`packages/frontend/qap-compiler/circuits/EdDSA/JubjubExp.circom`](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler/circuits/EdDSA)
-
----
-
-### Cryptographic Constants (EVM_IN Buffer)
-
-The Synthesizer preloads cryptographic constants into the `EVM_IN` reserved variables buffer:
-
-| Variable              | Value                                      | Purpose                        |
-| --------------------- | ------------------------------------------ | ------------------------------ |
-| `ADDRESS_MASK`        | \( 2^{160} - 1 \)                          | Mask for Ethereum addresses    |
-| `JUBJUB_BASE_X`       | 0x0e4840ac57f86f5e...                      | JubJub base point X coordinate |
-| `JUBJUB_BASE_Y`       | 0x2bcd9508a3dad316...                      | JubJub base point Y coordinate |
-| `JUBJUB_POI_X`        | 0 (point at infinity)                      | JubJub identity element X      |
-| `JUBJUB_POI_Y`        | 1 (point at infinity)                      | JubJub identity element Y      |
-| `NULL_POSEIDON_LEVEL0`| Poseidon hash of empty string at level 0   | Empty Merkle tree leaf         |
-| `NULL_POSEIDON_LEVEL1`| Poseidon hash of 4 empty level 0 nodes    | Empty Merkle tree level 1      |
-| `NULL_POSEIDON_LEVEL2`| Poseidon hash of 4 empty level 1 nodes    | Empty Merkle tree level 2      |
-| `NULL_POSEIDON_LEVEL3`| Poseidon hash of 4 empty level 2 nodes    | Empty Merkle tree root (empty) |
-
-**Initialization**: [`packages/frontend/synthesizer/src/synthesizer/handlers/bufferManager.ts:142-154`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/synthesizer/handlers/bufferManager.ts#L142-L154)
-
----
-
-### Integration with Event Hooks
-
-Cryptographic operations are triggered during specific EVM event phases:
-
-#### beforeMessage Phase
-
-**Purpose**: Verify transaction authenticity before execution
-
-```typescript
-evm.events.on('beforeMessage', async (msg) => {
-  if (tx instanceof TokamakL2Tx) {
-    // 1. Hash transaction message
-    const messageHashPt = synthesizer.placeCrypto('PoseidonCircuit9', messagePts);
-    
-    // 2. Verify EdDSA signature
-    const isValidPt = synthesizer.placeCrypto('EddsaVerify', [
-      messageHashPt,
-      publicKeyXPt, publicKeyYPt,
-      randomizerXPt, randomizerYPt,
-      signaturePt
-    ]);
-    
-    // 3. Assert signature is valid
-    synthesizer.placeArith('SUB', [isValidPt, synthesizer.loadAuxin(1n)]);
-  }
-});
-```
-
-#### afterMessage Phase
-
-**Purpose**: Finalize Merkle tree state and export root
-
-```typescript
-evm.events.on('afterMessage', async (result) => {
-  if (stateManager instanceof TokamakL2StateManager) {
-    // 1. Hash all updated leaves
-    const leafHashPts = stateManager.finalMerkleTree.leaves.map(leaf =>
-      synthesizer.placeCrypto('PoseidonCircuit2', [leaf.keyPt, leaf.valuePt])
-    );
-    
-    // 2. Build Merkle tree bottom-up (4-ary)
-    let currentLevel = leafHashPts;
-    for (let level = 0; level < 3; level++) {
-      const nextLevel = [];
-      for (let i = 0; i < currentLevel.length; i += 4) {
-        const children = [
-          currentLevel[i + 0] || getNullHash(level),
-          currentLevel[i + 1] || getNullHash(level),
-          currentLevel[i + 2] || getNullHash(level),
-          currentLevel[i + 3] || getNullHash(level)
-        ];
-        nextLevel.push(synthesizer.placeCrypto('PoseidonCircuit4', children));
-      }
-      currentLevel = nextLevel;
-    }
-    
-    // 3. Export final root
-    const finalRootPt = currentLevel[0];
-    synthesizer.addReservedVariableToBufferOut('RES_MERKLE_ROOT', finalRootPt, true);
-  }
-});
-```
-
-**Source**: [`packages/frontend/synthesizer/src/synthesizer/synthesizer.ts:110-278`](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/synthesizer/synthesizer.ts#L110-L278)
-
----
-
 ## Circuit Complexity Summary
 
 ### Constraint Counts by Operation Type
@@ -1600,28 +1266,6 @@ evm.events.on('afterMessage', async (result) => {
 | **Exponentiation**      | 258 + (803 × bit_length)        | EXP (e.g., 3^13 = 3,470)      |
 | **Memory Operations**   | Variable                        | MLOAD, MSTORE (with aliasing) |
 | **External Operations** | 0 (processed outside)           | KECCAK256                     |
-
----
-
-## Related Resources
-
-### Tokamak zk-EVM Documentation
-
-- [Synthesizer Documentation](https://tokamak.notion.site/Synthesizer-documentation-164d96a400a3808db0f0f636e20fca24)
-- [Synthesizer Architecture](./synthesizer-architecture.md)
-- [Synthesizer Execution Flow](./synthesizer-execution-flow.md)
-
-### Source Code
-
-- [Tokamak zk-EVM Repository](https://github.com/tokamak-network/Tokamak-zk-EVM)
-- [QAP Compiler (Circom)](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler)
-- [Synthesizer Source](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/synthesizer)
-
-### Official Ethereum EVM Documentation
-
-- [Ethereum.org - EVM](https://ethereum.org/en/developers/docs/evm/)
-- [EVM Opcodes Reference (evm.codes)](https://www.evm.codes/)
-- [Yellow Paper](https://ethereum.github.io/yellowpaper/paper.pdf)
 
 ---
 
@@ -1656,8 +1300,3 @@ evm.events.on('afterMessage', async (result) => {
 | `0x1d` | SAR        | ALU3          | `1 << 29` | 816         | 638        | 178    |
 
 _Source: [`packages/frontend/qap-compiler/subcircuits/library/info/`](https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler/subcircuits/library/info) - Compiled subcircuit constraint information from Circom circuits_
-
----
-
-**Last Updated**: October 2025  
-**Maintained by**: [Tokamak Network](https://www.tokamak.network/)

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>README</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+    h2 { color: #34495e; margin-top: 30px; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; }
+    h3 { color: #7f8c8d; margin-top: 20px; }
+    code { font-family: 'Monaco', 'Courier New', monospace; font-size: 0.9em; }
+    pre { line-height: 1.4; }
+    a { color: #3498db; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { display: block; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px; }
+    ul { margin: 15px 0; padding-left: 30px; }
+    li { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>Project Overview</h1>
+
+<p>_Last updated in Oct. 2025._</p>
+
+<h2>TL;DR <a href="#df29" id="df29"></a></h2>
+
+<ul><li>Since 2022, <a href="https://tokamak.network/#/">Tokamak Network</a> have been developing a new type of zk-EVM for layer-2 rollups.</li>
+<li>Despite the similar name, our zk-EVM takes a completely different technical approach compared to traditional zk-EVMs.</li>
+<li>Unlike traditional zk-EVMs, our zk-EVM is lightweight, affordable, and user-friendly.</li>
+<li>As “zk-EVM using SNARK assisted by interactive fraud proofs”, this project has been accepted by the <strong>Ethereum Foundation</strong> for Academic Grants Round 2023 of the Ecosystem Support Program (ESP).</li>
+
+<h2>The story <a href="#id-7f40" id="id-7f40"></a></h2>
+
+<h3>The Demand <a href="#id-7b4f" id="id-7b4f"></a></h3>
+
+<p>Project Tokamak zk-EVM was born from the ecosystem and strategy of <a href="https://www.tokamak.network/">Tokamak Network</a>.</p>
+
+<p><strong>(Tokamak ecosystem)</strong> The Tokamak Network aims to support the Ethereum ecosystem by providing on-demand <a href="https://ethereum.org/en/developers/docs/scaling/#why-is-layer-2-needed">layer 2 rollups</a>. In other words, the Tokamak ecosystem exists as an extension and subset of the Ethereum ecosystem. Its goal is to let Ethereum users and infrastructure providers seamlessly migrate to Tokamak Network demand arises — and then return to Ethereum once that demand is fulfilled. This flexible model sets Tokamak Network apart from other layer 2 networks, which tend to maintain their own isolated, fixed ecosystems.</p>
+
+<p><strong>(Tokamak strategy)</strong> To define its strategy, the Tokamak Network has focuses on understanding which features Ethereum users value most. After careful thought, it concluded that _privacy_ and _trust-reliance_ are top priorities.</p>
+
+<p>The core strength of (true) blockchains like Ethereum lies in guaranteeing security without relying on trust among network participants. However, this comes at the cost of slower transaction throughput, higher fees, and limited scalability. Layer 2 solutions are designed to offer Ethereum users better performance by partially shifting reliance from Ethereum’s trustless model to the trust assumptions on Layer 2 operators or third parties. In practice, this goal has been partially achieved: users often still need to trust the Layer 2 operator, and while performance has improved, the gains have sometimes fallen short of expectations depending on the application and design.</p>
+
+<p>The Tokamak Network’s strategy is similar to other Layer 2 solutions, but differs in its details. While it accepts the trade-off of relying on trust in exchange for benefits, it redefines _who_ is trusted and _what_ those benefits are. In the Tokamak model, trust is placed in a small group of users who not only trust each other but also _operate their own the Layer 2_. The Tokamak Network believes that the key benefit for this group is _privacy —_ something Ethereum does not natively provide.</p>
+
+<p>In short, Tokamak Network’s strategy is to prove on-demand Layer 2 solutions that empower users to run their own rollups in order to enhance privacy.</p>
+
+<h3>The Supply <a href="#id-854f" id="id-854f"></a></h3>
+
+<p>Project Tokamak zk-EVM will serve as the foundation for a follow-up project, _Tokamak zk-rollup_. Together, they will meet the Tokamak Network’s goals and mark a major breakthrough in making zero-knowledge Layer 2 networks accessible, practical, and privacy-preserving. This system will show how _anyone_ can build and operate a ZKP-based rollup to improve their privacy — without needing technical expertise or specialized hardware.</p>
+
+<p><strong>(Project Tokamak zk-EVM)</strong> Tokamak zk-EVM consists of two core components: Frontend and Backend (see the end of this article for explanation of these concepts), fulfilling one of Tokamak Network’s central goals: “_Anyone can build, operate, and participate in a ZKP-based rollup._”</p>
+
+<p><li>The <strong>Frontend</strong>, powered by the Synthesizer, provides an intuitive graphical interface that allows even non-experts to convert Ethereum transaction or block validation logic into ZKP circuits. Users simply input a hash — no coding or knowledge of ZKPs is required. This simplicity will dramatically lower the technical barrier to building or operating a rollup.</li></p>
+
+<img src="https://YOUR-USERNAME.github.io/tokamak-zk-evm-docs/.gitbook/assets/01.png" alt="Playground GUI" style="max-width: 100%;">
+
+<p><p align="center"><em>Playground GUI</em></p></p>
+
+<p><li>The <strong>Backend</strong> features a lightweight prover that enables zk-proof generation on standard hardware. Unlike conventional systems that rely on high-performance or specialized machines, the Tokamak zk-EVM allows anyone to serve as a prover using an ordinary laptop.</li></p>
+
+<p><strong>(Tokamak zk-Rollup)</strong> Built on top of the Tokamak zk-EVM, the Tokamak zk-rollup is designed primarily to ensure privacy. While it also allows Layer 1 to verify Layer 2 activity, its core purpose is to obscure specific user actions in the process. This ensures that activity on Layer 2 remains private — even when verified by Layer 1.</p>
+
+<p>In addition, Pre-SNARK and Post-SNARK consensus protocols are offered as optional mechanisms for low-trust environments — whether between Layer 1 and Layer 2, or among participants within Layer 2. These protocols help resolve disputes and establish consensus without relying on centralized authority.</p>
+
+<h2>Into the Tokamak zk-EVM <a href="#cf0e" id="cf0e"></a></h2>
+
+<h3>Technical challenges in building a zk-EVM <a href="#f766" id="f766"></a></h3>
+
+<p>Project Tokamak zk-EVM addresses the problem of converting Ethereum block validation into ZKP proofs — a problem commonly tackled by what are known as zk-EVMs. Traditional zk-EVMs, however, are well known for being either difficult to use or expensive in terms of proof generation.</p>
+
+<img src="https://miro.medium.com/v2/resize:fit:1400/1*7Uw2YCmmzEi54NmpmmjayA.png" alt="Ethereum transaction/block validation with zk-EVM" style="max-width: 100%;">
+
+<p><p align="center"><em>Ethereum transaction/block validation with zk-EVM</em></p></p>
+
+<p>For example, Type-1 zk-EVMs, as defined by <a href="https://vitalik.eth.limo/general/2022/08/04/zkevm.html">Vitalik</a> (e.g., Scroll), use a massive circuit that mimics the full EVM. These circuits pre-encode all the uncertainties involved in Ethereum block validation. While this approach avoids the need for preprocessing, the large circuit size leads to extremely high computational costs, requiring expensive and specialized hardware for proof generation.</p>
+
+<p>Type-2 or higher zk-EVMs attempt to reduce this cost by using lighter circuits that simulate a smaller<a href="https://en.wikipedia.org/wiki/Random-access_machine"> random-access machine</a> (RAM) instead of the full <a href="https://ethereum.org/en/developers/docs/evm/">EVM</a> (EVM is also a large-scale RAM). However, these virtual machines cannot fully emulate real EVM programs (i.e., smart contracts). In addition, <strong>compilers</strong> are required to translate EVM programs into another language that is compatible with the smaller RAM.</p>
+
+<p>The core issue here is <strong>compiler integrity</strong>: no technology today can formally guarantee that compiler outputs faithfully preserve the original program’s logic. As a result, these zk-EVMs must address this gap either by relying on trusted third parties or by reaching consensus among decentralized participants.</p>
+
+<p>A concrete example is <a href="https://docs.succinct.xyz/docs/sp1/introduction">SP1 by Succinct Network</a>. To validate Ethereum blocks using SP1, you must write the Ethereum block validation logic in Rust. This code is compiled into a bytecode interpreted by RISC-V machine, which is a small-scale RAM used in SP1’s proof system. While SP1’s ZKP system can mathematically prove that the RISC-V bytecode executed correctly, it <strong>does not</strong> guarantee that the RISC-V bytecode itself is a faithful implementation of Ethereum’s block validation logic.</p>
+
+<h3>Design Values <a href="#id-979f" id="id-979f"></a></h3>
+
+<p>Our design is guided by two core principles:</p>
+
+<p><li>Easy-to-use front-end compilers</li><br><li>Lightweight back-end algorithms</li></p>
+
+<h3>Solution <a href="#id-9185" id="id-9185"></a></h3>
+
+<p>We propose a new approach to ZKPs that emphasizes usability and efficiency, based on our fundamental research: <a href="https://eprint.iacr.org/2024/507">https://eprint.iacr.org/2024/507</a>.</p>
+
+<p>As discussed in the _technical challenges_, one way to convert Ethereum block validation into ZK proofs is through the use of compilers. While we also use compilers, our approach differs significantly from that of traditional zk-EVMs. Specifically, we do <strong>not</strong> use a RAM-style circuit to handle all uncertainties — an approach that inevitably increases circuit size due to higher information entropy.</p>
+
+<p>Instead, our circuits are block- or transaction-specific and are designed more like FPGA logic. As illustrated below, our process involves three stages:</p>
+
+<p>1. <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/qap-compiler"><strong>qap-compiler</strong></a> and <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/backend/setup"><strong>setup</strong></a> define and commit to a library of modular, reusable subcircuits, each implementing essential operations for Ethereum block or transaction validation.<br>2. <a href="https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend/synthesizer"><strong>synthesizer</strong></a> preprocesses a given block or transaction to determine which subcircuits to use and how they should be connected.<br>3. <a href="https://eprint.iacr.org/2024/507"><strong>prove and verify</strong></a> combines the subcircuits into a final, purpose-built circuit ready for proof generation.</p>
+
+<img src="https://YOUR-USERNAME.github.io/tokamak-zk-evm-docs/assets/flowchart.png" alt="The path from transaction/block to ZKP proof generation" style="max-width: 100%;">
+
+<p><p align="center"><em>The path from transaction/block to ZKP proof generation</em></p></p>
+
+<h3>Advantages <a href="#bfd0" id="bfd0"></a></h3>
+
+<p>This approach brings three key advantages:</p>
+
+<p><li><strong>Lightweight Circuits:</strong> Because each circuit is optimized for a specific block or transaction, proof generation requires far less computational power and hardware resources.</li><br><li><strong>Low Entropy Preprocessing:</strong> Leveraging a predefined subcircuit library, the synthesizer produces low-entropy outputs, minimizing reliance on trust or communication overhead in consensus mechanisms.</li><br><li><strong>Extremely Easy to Use:</strong> Users simply input the hash of a transaction or block into <a href="https://github.com/tokamak-network/Tokamak-zk-EVM-playgrounds">our graphical interface</a>, and the compiler handles the rest — no coding required.</li></p>
+
+<h3>Development Status (as of Oct. 2025)</h3>
+
+<p><li><a href="https://eprint.iacr.org/2024/507"><strong>Zk-SNARK Theory</strong></a><strong>:</strong> Our theoretical framework for both front-end and back-end algorithms has been established, and their security has been formally analyzed.</li><br><li><a href="https://eprint.iacr.org/2024/1671"><strong>Pre-SNARK Consensus Theory</strong></a><strong>:</strong> We have designed and analyzed a secure multi-party computation protocol for reaching consensus on the subcircuit library.</li><br><li><a href="https://eprint.iacr.org/2024/1664"><strong>Post-SNARK Consensus Theory</strong></a><strong>:</strong> We have designed and analyzed a threshold consensus protocol to reach agreement on the integrity of synthesizer outputs.</li><br><li><a href="https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/frontend"><strong>Front-End Compilers</strong></a><strong>:</strong> Development and implementation have been published; the tools are now available for public testing.</li><br><li><a href="https://github.com/tokamak-network/Tokamak-zk-EVM/tree/main/packages/backend"><strong>Back-End Algorithms</strong></a><strong>:</strong> Same as above.</li></p>
+
+<h2>What’s Next? <a href="#be1e" id="be1e"></a></h2>
+
+<p>We envision a future where anyone can easily launch and operate their <strong>own private Tokamak zk-rollup</strong> at low cost using our ZKP technology. The strength of our work lies in making zero-knowledge proofs both easy to use and affordable. Our zk-EVM is a step toward realizing that vision. Inspired by Satoshi — for greater privacy.</p>
+
+<h2>Few more details <a href="#c468" id="c468"></a></h2>
+
+<h3>Q: What do “Frontend” and “Backend” mean by in ZKP? <a href="#id-3ac5" id="id-3ac5"></a></h3>
+
+<p>The terminologies “Frontend” and “Backend” have been introduced by Justin Thaler in his book “<a href="https://people.cs.georgetown.edu/jthaler/ProofsArgsAndZK.pdf">Proof, Arguments, and Zero-Knowledge</a>”.</p>
+
+<p>The frontend refers to a set of compilers that translate general <a href="<https://en.wikipedia.org/wiki/NP_(complexity">NP-statements</a>>), written in any programming language, into a format understandable by the ZKP backend — known as a circuit.</p>
+
+<p>The backend is a set of protocol algorithms that allow a prover and a verifier to communicate and argue whether a given statement, expressed as a circuit, is true.</p>
+
+<p>A ZKP system is the combination of both a frontend and a backend.</p>
+
+<h3><strong>Q: Is Tokamak zk-rollup a private blockchain like Hyperledger?</strong> <a href="#aa26" id="aa26"></a></h3>
+
+<p><strong>A:</strong> No, Tokamak zk-rollup is not a private blockchain. It’s a layer 2 privacy solution built on top of Ethereum. Ethereum’s mainnet operates without requiring trust in any particular entity, whereas private blockchains rely on users trusting in a small group of authorized operators.</p>
+
+<p>In Tokamak rollup, users themselves act as operators, and the system assumes partial (but not full) trust among them. Importantly, if trust among users breaks down and consensus fails, users can always safely return to the Ethereum mainnet without losing assets or security guaratnee.</p>
+
+<p>In contrast, in a private blockchain, if the authorized operators collude or their trust is broken, ordinary users may have no choice but to suffer the consequences.</p>
+
+<h3><strong>Q: Is Tokamak zk-rollup a state channel?</strong> <a href="#dd16" id="dd16"></a></h3>
+
+<p><strong>A:</strong> Tokamak zk-rollup shares characteristics with both <a href="https://ethereum.org/en/developers/docs/scaling/state-channels/">state channels</a> and rollup networks. All of these are considered Layer 2 solutions but differ in purpose and design.</p>
+
+<p>Features of state channels:</p>
+
+<p><li>Improve <strong>scalability</strong> by offloading transactions to Layer 2.</li><br><li>Transactions are processed based on <strong>mutual consensus</strong> between users in the channel.</li><br><li>Only the final state of the channel is submitted to Ethereum.</li><br><li>Layer 2 transactions inside the channel <strong>cannot</strong> be re-verified by Ethereum, only the final settlement is accepted.</li><br><li>The channel is <strong>closed</strong> after the final settlement is submitted to Ethereum.</li><br><li>Typically, <strong>only one DApp</strong> operates within a state channel.</li></p>
+
+<p>Features of rollup networks:</p>
+
+<p><li>Improve <strong>scalability</strong> by executing transactions on Layer 2.</li><br><li>Transactions are processed based on <strong>partial trust</strong> in operators combined with either a <a href="https://en.wikipedia.org/wiki/Verifiable_computing"><strong>verifiable computation</strong></a> (e.g., zk-EVM) or a <strong>consensus</strong> (e.g., <a href="https://docs.optimism.io/stack/fault-proofs">fault proofs</a>) between Ethereum and Layer 2.</li><br><li>Periodically submit <strong>batch commitments</strong> of transactions to Ethereum.</li><br><li>Ethereum can <strong>partially verify</strong> rollup transactions.</li><br><li>The rollup network operates <strong>semi-permanently</strong>.</li><br><li><strong>Multiple DApps</strong> are supported on a single rollup network.</li></p>
+
+<p>Features of Tokamak zk-rollup (Tentative)</p>
+
+<p><li>Improve <strong>privacy</strong> by utilizing Layer 2.</li><br><li>Transactions are processed through a combination of <strong>verifiable computation</strong> + <strong>mutual consensus</strong>.</li><br><li>Periodically submit <strong>batch commitments</strong> of transactions to Ethereum.</li><br><li>Ethereum can <strong>partially verify</strong> rollup transactions.</li><br><li>The channel can <strong>continue</strong> or be <strong>dismantled</strong> based on user demand.</li><br><li><strong>Multiple DApps</strong> are supported on a single channel (known as a <a href="https://dl.acm.org/doi/10.1145/3243734.3243856">general state channel</a>).</li></ul><br></p>
+  
+  <hr style="margin-top: 60px; border: none; border-top: 1px solid #ddd;">
+  <p style="color: #7f8c8d; font-size: 0.9em;">
+    <em>이 문서는 <a href="https://YOUR-USERNAME.github.io/tokamak-zk-evm-docs">Tokamak zk-EVM Documentation</a>에서 변환되었습니다.</em>
+  </p>
+</body>
+</html>

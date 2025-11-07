@@ -1,6 +1,12 @@
 # Table of contents
 
-- [Project Overview](README.md)
+## GETTING STARTED
+
+- [Introduction](README.md)
+- [Packages](packages.md)
+
+---
+
 - [Frontend](frontend/README.md)
   - [Synthesizer](frontend/synthesizer.md)
     - [Concepts](frontend/synthesizer/synthesizer-concepts.md)

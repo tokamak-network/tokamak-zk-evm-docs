@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synthesizer-repository-structure</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+    h2 { color: #34495e; margin-top: 30px; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; }
+    h3 { color: #7f8c8d; margin-top: 20px; }
+    code { font-family: 'Monaco', 'Courier New', monospace; font-size: 0.9em; }
+    pre { line-height: 1.4; }
+    a { color: #3498db; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { display: block; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px; }
+    ul { margin: 15px 0; padding-left: 30px; }
+    li { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>Synthesizer: Repository Structure</h1>
+
+<p>This document provides a detailed overview of the <a href="synthesizer-terminology.md#synthesizer">Synthesizer</a> codebase file structure and organization.</p>
+
+<p>---</p>
+
+<h2>Directory Tree</h2>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>packages/frontend/synthesizer/src/
+├── evm.ts                          # Extended EVM class
+├── interpreter.ts                  # Dual execution engine
+├── constructors.ts                 # EVM factory functions
+├── message.ts                      # Transaction message wrapper
+├── opcodes/
+│   ├── functions.ts                # EVM opcode handlers
+│   └── synthesizer/
+│       └── handlers.ts             # Synthesizer opcode handlers
+├── adapters/
+│   └── synthesizerAdapter.ts      # External API interface
+├── tokamak/
+│   ├── core/
+│   │   ├── synthesizer/
+│   │   │   └── index.ts           # Main Synthesizer class
+│   │   ├── handlers/
+│   │   │   ├── stateManager.ts    # State management
+│   │   │   ├── operationHandler.ts # Arithmetic/logic ops
+│   │   │   ├── dataLoader.ts      # External data (storage, env, etc.)
+│   │   │   ├── memoryManager.ts   # Memory aliasing resolution
+│   │   │   └── bufferManager.ts   # LOAD/RETURN buffer management
+│   │   └── finalizer/
+│   │       ├── index.ts           # Finalizer orchestrator
+│   │       ├── permutation.ts     # Wire map generation
+│   │       └── placementRefactor.ts # Wire size optimization
+│   ├── pointers/
+│   │   ├── stackPt.ts             # Symbolic stack
+│   │   ├── memoryPt.ts            # 2D memory tracker
+│   │   └── dataPointFactory.ts    # Symbol factory
+│   ├── types/                     # TypeScript type definitions
+│   ├── constant/                  # Constants &amp; subcircuit mappings
+│   └── utils/                     # Utility functions
+</code></pre>
+
+<p>---</p>
+
+<h2>Core Components</h2>
+
+<h3>EVM Extension Layer</h3>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">evm.ts</code></p>
+
+<ul><li><strong>Purpose</strong>: Extended EthereumJS EVM class</li>
+<li><strong>Key Addition</strong>: Synthesizer instance integration</li>
+<li><strong>Role</strong>: Coordinates dual execution (EVM + Synthesizer)</li>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">interpreter.ts</code></p>
+
+<p><li><strong>Purpose</strong>: Bytecode execution engine</li><br><li><strong>Key Addition</strong>: Dual state management (Stack/<a href="synthesizer-terminology.md#stackpt">StackPt</a>, Memory/<a href="synthesizer-terminology.md#memorypt">MemoryPt</a>)</li><br><li><strong>Role</strong>: Orchestrates opcode-by-opcode execution and consistency checks</li></p>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">constructors.ts</code></p>
+
+<p><li><strong>Purpose</strong>: Factory functions for creating EVM instances</li><br><li><strong>Key Addition</strong>: RPC-based state manager integration</li><br><li><strong>Role</strong>: Entry point for Synthesizer execution</li></p>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">message.ts</code></p>
+
+<p><li><strong>Purpose</strong>: Transaction message wrapper</li><br><li><strong>Role</strong>: Encapsulates transaction data for EVM execution</li></p>
+
+<p>---</p>
+
+<h3>Opcode Handlers</h3>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">opcodes/functions.ts</code></p>
+
+<p><li><strong>Purpose</strong>: Original EthereumJS opcode handlers</li><br><li><strong>Role</strong>: Standard EVM execution logic (value processing)</li></p>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">opcodes/synthesizer/handlers.ts</code></p>
+
+<p><li><strong>Purpose</strong>: Tokamak Synthesizer opcode handlers</li><br><li><strong>Role</strong>: Circuit generation logic (<a href="synthesizer-terminology.md#symbol-processing">symbol processing</a>)</li></p>
+
+<p>---</p>
+
+<h3>Synthesizer Core</h3>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/core/synthesizer/index.ts</code></p>
+
+<p><li><strong>Purpose</strong>: Main Synthesizer class (Facade pattern)</li><br><li><strong>Key Methods</strong>:</li><br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">placeArith()</code> - Arithmetic operations<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">loadAuxin()</code> - Auxiliary inputs<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">loadStorage()</code> - Storage access<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">loadEnvInf()</code> - Environment info<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">loadBlkInf()</code> - Block info<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">place()</code> - Generic placement creation<br><li><strong>Role</strong>: Unified interface for all Synthesizer operations</li></p>
+
+<p>---</p>
+
+<h3>Handler Classes</h3>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/core/handlers/stateManager.ts</code></p>
+
+<p><li><strong>Purpose</strong>: Circuit state management</li><br><li><strong>Key Data</strong>:</li><br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">placements</code> - Map of all <a href="synthesizer-terminology.md#subcircuit">subcircuit</a> instances<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">placementIndex</code> - Sequential ID counter<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">subcircuitInfoByName</code> - Subcircuit metadata<br><li><strong>Role</strong>: Central registry for circuit construction</li></p>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/core/handlers/operationHandler.ts</code></p>
+
+<p><li><strong>Purpose</strong>: Arithmetic and logic operation handling</li><br><li><strong>Key Methods</strong>:</li><br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">placeArith()</code> - Map operations to subcircuits (ALU1, ALU2, etc.)<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">createOutput()</code> - Generate output symbols<br><li><strong>Role</strong>: Translates EVM operations to circuit <a href="synthesizer-terminology.md#placement">placements</a></li></p>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/core/handlers/dataLoader.ts</code></p>
+
+<p><li><strong>Purpose</strong>: External data loading (storage, environment, block info)</li><br><li><strong>Key Methods</strong>:</li><br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">loadStorage()</code> - Storage data with caching<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">loadEnvInf()</code> - Environment information<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">loadBlkInf()</code> - Block information<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">loadCalldata()</code> - Transaction calldata<br><li><strong>Role</strong>: Manages LOAD buffer (Placement 0 and 2)</li></p>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/core/handlers/memoryManager.ts</code></p>
+
+<p><li><strong>Purpose</strong>: Memory operation and <a href="synthesizer-terminology.md#data-aliasing">aliasing</a> resolution</li><br><li><strong>Key Methods</strong>:</li><br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">placeMemoryToStack()</code> - Load memory with aliasing<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">combineMemorySlices()</code> - Reconstruct from fragments<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">applyShift()</code> - Generate SHR/SHL subcircuits<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">applyMask()</code> - Generate AND subcircuits<br><li><strong>Role</strong>: Handles complex memory data dependencies</li></p>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/core/handlers/bufferManager.ts</code></p>
+
+<p><li><strong>Purpose</strong>: LOAD/RETURN <a href="synthesizer-terminology.md#buffer-placements">buffer</a> management</li><br><li><strong>Key Methods</strong>:</li><br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">addWireToInBuffer()</code> - Add to input buffers (<a href="synthesizer-terminology.md#pub-in-and-pub-out">PUB_IN</a>, <a href="synthesizer-terminology.md#prv-in-and-prv-out">PRV_IN</a>)<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">addWireToOutBuffer()</code> - Add to output buffers (<a href="synthesizer-terminology.md#pub-in-and-pub-out">PUB_OUT</a>, <a href="synthesizer-terminology.md#prv-in-and-prv-out">PRV_OUT</a>)<br><li><strong>Role</strong>: Bridge between external values and internal symbols</li></p>
+
+<p>---</p>
+
+<h3>Finalizer Components</h3>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/core/finalizer/index.ts</code></p>
+
+<p><li><strong>Purpose</strong>: Orchestrates output file generation</li><br><li><strong>Process</strong>:</li><br>  1. Optimize placements (<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PlacementRefactor</code>)<br>  2. Generate wire connections (<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Permutation</code>)<br>  3. Calculate witness (<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">outputPlacementVariables</code>)<br>  4. Write output files<br><li><strong>Role</strong>: Converts circuit state to backend-compatible format</li></p>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/core/finalizer/permutation.ts</code></p>
+
+<p><li><strong>Purpose</strong>: <a href="synthesizer-terminology.md#wire">Wire</a> map and <a href="synthesizer-terminology.md#witness">witness</a> generation</li><br><li><strong>Key Methods</strong>:</li><br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">buildPermutation()</code> - Create wire connection groups<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">outputPermutation()</code> - Generate <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">permutation.json</code><br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">outputPlacementVariables()</code> - Generate <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">placementVariables.json</code><br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">generateSubcircuitWitness()</code> - Calculate witness using WASM<br><li><strong>Role</strong>: Produces three critical output files</li></p>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/core/finalizer/placementRefactor.ts</code></p>
+
+<p><li><strong>Purpose</strong>: Circuit optimization</li><br><li><strong>Key Optimizations</strong>:</li><br>  - Wire size adjustments<br>  - Redundant placement removal<br>  - Wire index normalization<br><li><strong>Role</strong>: Prepares circuit for efficient proving</li></p>
+
+<p>---</p>
+
+<h3>Data Structures</h3>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/pointers/stackPt.ts</code></p>
+
+<p><li><strong>Purpose</strong>: Symbolic stack implementation</li><br><li><strong>Data Structure</strong>: Array of <a href="synthesizer-terminology.md#datapt-data-point">DataPt</a> symbols</li><br><li><strong>Role</strong>: Tracks stack operations symbolically</li></p>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/pointers/memoryPt.ts</code></p>
+
+<p><li><strong>Purpose</strong>: 2D memory tracking (offset × time)</li><br><li><strong>Data Structure</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Map<timestamp, {memOffset, containerSize, dataPt}></code></li><br><li><strong>Key Method</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">getDataAlias()</code> - Identifies overlapping writes</li><br><li><strong>Role</strong>: Enables memory <a href="synthesizer-terminology.md#data-aliasing">aliasing</a> resolution</li></p>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/pointers/dataPointFactory.ts</code></p>
+
+<p><li><strong>Purpose</strong>: DataPt symbol creation</li><br><li><strong>Key Method</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">create()</code> - Generate unique symbols</li><br><li><strong>Role</strong>: Factory pattern for symbol instantiation</li></p>
+
+<p>---</p>
+
+<h3>Type Definitions</h3>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/types/</code></p>
+
+<p><li><strong>Purpose</strong>: TypeScript type definitions</li><br><li><strong>Key Types</strong>:</li><br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">DataPt</code> - Symbolic data point<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PlacementEntry</code> - Subcircuit instance<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Placements</code> - Map of all placements<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">DataAliasInfo</code> - Memory aliasing metadata<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">SubcircuitNames</code> - Subcircuit type names<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">ArithmeticOperator</code> - Operation names</p>
+
+<p>---</p>
+
+<h3>Constants and Mappings</h3>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/constant/</code></p>
+
+<p><li><strong>Purpose</strong>: System-wide constants</li><br><li><strong>Key Constants</strong>:</li><br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">SUBCIRCUIT_MAPPING</code> - Operation → Subcircuit mapping<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">INITIAL_PLACEMENT_INDEX</code> - Starting ID (4)<br>  - <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">BUFFER_PLACEMENT_IDS</code> - 0 (PUB_IN), 1 (PUB_OUT), 2 (PRV_IN), 3 (PRV_OUT)</p>
+
+<p>---</p>
+
+<h3>Utilities</h3>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">tokamak/utils/</code></p>
+
+<p><li><strong>Purpose</strong>: Helper functions</li><br><li><strong>Examples</strong>:</li><br>  - BigInt conversions<br>  - Byte manipulation<br>  - Array utilities<br>  - Validation helpers</p>
+
+<p>---</p>
+
+<h3>External Interface</h3>
+
+<p>#### <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">adapters/synthesizerAdapter.ts</code></p>
+
+<p><li><strong>Purpose</strong>: Public API for external consumers</li><br><li><strong>Key Function</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">execSynthesizer(txHash, rpcUrl, outputPath)</code></li><br><li><strong>Role</strong>: User-facing interface for transaction processing</li></ul><br></p>
+  
+  <hr style="margin-top: 60px; border: none; border-top: 1px solid #ddd;">
+  <p style="color: #7f8c8d; font-size: 0.9em;">
+    <em>이 문서는 <a href="https://YOUR-USERNAME.github.io/tokamak-zk-evm-docs">Tokamak zk-EVM Documentation</a>에서 변환되었습니다.</em>
+  </p>
+</body>
+</html>

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>synthesizer-transaction-flow</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+    h2 { color: #34495e; margin-top: 30px; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; }
+    h3 { color: #7f8c8d; margin-top: 20px; }
+    code { font-family: 'Monaco', 'Courier New', monospace; font-size: 0.9em; }
+    pre { line-height: 1.4; }
+    a { color: #3498db; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { display: block; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px; }
+    ul { margin: 15px 0; padding-left: 30px; }
+    li { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>Synthesizer: Transaction Processing Flow</h1>
+
+<p>This document provides a detailed walkthrough of how Synthesizer processes Ethereum transactions, from initialization to finalization, with code-level details at each step.</p>
+
+<p>---</p>
+
+<h2>Overview</h2>
+
+<p>The transaction processing follows four main phases:</p>
+
+<p>1. <strong>Initialization</strong> - Create EVM and Synthesizer instances<br>2. <strong>Execution Setup</strong> - Prepare Interpreter with dual state<br>3. <strong>Bytecode Execution</strong> - Process each opcode with dual handlers<br>4. <strong>Finalization</strong> - Generate output files</p>
+
+<p>---</p>
+
+<h2>Code Execution Flow Overview</h2>
+
+<p>This diagram shows the key function calls and code paths from transaction input to circuit output:</p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>┌─────────────────────────────────────────────────────────────────────────┐
+│  PHASE 1: INITIALIZATION                                                 │
+└─────────────────────────────────────────────────────────────────────────┘
+
+<p>  createEVM()<br>     ├─► new EVM()<br>     │    └─► this.synthesizer = new Synthesizer()<br>     │         └─► new StateManager()<br>     │              └─► _initializePlacements()  // IDs 0-3<br>     └─► new RPCStateManager()</p>
+
+<p>┌─────────────────────────────────────────────────────────────────────────┐<br>│  PHASE 2: EXECUTION SETUP                                                │<br>└─────────────────────────────────────────────────────────────────────────┘</p>
+
+<p>  EVM.runCall(txData)<br>     └─► new Interpreter(evm, stateManager, ..., synthesizer)<br>          └─► this._runState = {<br>                stack, stackPt,    // Dual execution state<br>                memory, memoryPt,<br>                synthesizer<br>              }</p>
+
+<p>┌─────────────────────────────────────────────────────────────────────────┐<br>│  PHASE 3: BYTECODE EXECUTION (Loop for each opcode)                      │<br>└─────────────────────────────────────────────────────────────────────────┘</p>
+
+<p>  Interpreter.runStep()<br>     ├─► opFn(runState, common)  // Unified handler<br>     │    ├─► EVM: stack.push(result)<br>     │    └─► Synthesizer: synthesizerArith() / loadStorage() / placeMemoryToStack()<br>     │         └─► StateManager.placements.set(id, placement)<br>     │<br>     └─► Consistency check: stack[i] === stackPt[i].value</p>
+
+<p>┌─────────────────────────────────────────────────────────────────────────┐<br>│  PHASE 4: FINALIZATION                                                   │<br>└─────────────────────────────────────────────────────────────────────────┘</p>
+
+<p>  Finalizer.exec()<br>     ├─► PlacementRefactor.refactor()<br>     ├─► new Permutation(placements)<br>     │    ├─► _buildPermGroup()        // Group wires by parent-child<br>     │    └─► _correctPermutation()     // Generate 3-entry cycles<br>     ├─► outputPlacementVariables()    // Calculate witness via WASM<br>     └─► outputInstance()              // Extract buffer values</p>
+
+<p>  Output: permutation.json, instance.json, placementVariables.json<br></code></pre></p>
+
+<p>---</p>
+
+<h2>Detailed Phase-by-Phase Breakdown</h2>
+
+<h3>Phase 1: Initialization</h3>
+
+<p><strong>What happens:</strong></p>
+
+<ul><li>EVM and Synthesizer instances created</li>
+<li>StateManager initializes buffer placements (0-3)</li>
+<li>RPC connection established for on-demand state queries</li>
+
+<p><strong>Detailed Flow:</strong></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>User Call
+   │
+   ▼
+createEVM()                           [constructors.ts:19]
+   │
+   ├─► Create EVM instance            [evm.ts:74]
+   │    └─► new Synthesizer()         [evm.ts:271]
+   │         └─► new StateManager()   [synthesizer/index.ts:37]
+   │              ├─► initializeState()
+   │              ├─► initializeSubcircuitInfo()
+   │              └─► initializePlacements()  (IDs 0-3: Buffers)
+   │
+   └─► Create RPCStateManager         [constructors.ts:30]
+        └─► Fetch transaction &amp; block data from RPC
+</code></pre>
+
+<p><strong>Key Code:</strong></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// constructors.ts:19 - Entry point
+export async function createEVM(opts?: EVMOpts) {
+  const evm = new EVM(opts);
+  return evm;
+}
+
+<p>// evm.ts:271 - Synthesizer instantiation<br>constructor(opts: EVMOpts) {<br>  // ... original EthereumJS initialization<br>  this.synthesizer = new Synthesizer();  // Tokamak addition<br>}</p>
+
+<p>// synthesizer/index.ts:37 - StateManager initialization<br>constructor() {<br>  this._state = new StateManager();<br>  this._state._initializePlacements();  // Creates buffer placements 0-3<br>}<br></code></pre></p>
+
+<p><strong><a href="synthesizer-terminology.md#buffer-placements">Buffer Placements</a> (IDs 0-3):</strong></p>
+
+<p><li><strong>Placement 0 (<a href="synthesizer-terminology.md#pub-in-and-pub-out"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PUB_IN</code></a>)</strong>: Public input buffer (calldata, block info, msg.sender)</li><br><li><strong>Placement 1 (<a href="synthesizer-terminology.md#pub-in-and-pub-out"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PUB_OUT</code></a>)</strong>: Public output buffer (return data, logs)</li><br><li><strong>Placement 2 (<a href="synthesizer-terminology.md#prv-in-and-prv-out"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PRV_IN</code></a>)</strong>: Private input buffer (storage, account state)</li><br><li><strong>Placement 3 (<a href="synthesizer-terminology.md#prv-in-and-prv-out"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PRV_OUT</code></a>)</strong>: Private output buffer (storage updates)</li></p>
+
+<p>---</p>
+
+<h3>Phase 2: Execution Setup</h3>
+
+<p><strong>What happens:</strong></p>
+
+<p><li>Interpreter created with dual state (Stack/StackPt, Memory/MemoryPt)</li><br><li>Message wraps transaction data</li><br><li>RunState prepared with all necessary references</li></p>
+
+<p><strong>Detailed Flow:</strong></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>EVM.runCall()                         [evm.ts:858]
+   │
+   ├─► Create Message                 [message.ts:48]
+   │
+   ├─► Create Interpreter             [interpreter.ts:152]
+   │    └─► Initialize RunState       [interpreter.ts:217]
+   │         ├─► Stack (EVM)
+   │         ├─► StackPt (Synthesizer)
+   │         ├─► Memory (EVM)
+   │         ├─► MemoryPt (Synthesizer)
+   │         └─► synthesizer reference
+   │
+   └─► Interpreter.run()              [interpreter.ts:300]
+</code></pre>
+
+<p><strong>Key Code:</strong></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// evm.ts:858 - Create Interpreter with Synthesizer
+async runCall(opts: EVMRunCallOpts): Promise&lt;EVMResult&gt; {
+  const interpreter = new Interpreter(
+    this,
+    this.stateManager,
+    // ... other params
+    this.synthesizer  // Pass Synthesizer to interpreter
+  );
+  return interpreter.run(message);
+}
+
+<p>// interpreter.ts:217 - RunState with dual structures<br>this._runState = {<br>  // EVM state<br>  stack: new Stack(),<br>  memory: new Memory(),</p>
+
+<p>  // Synthesizer state (parallel processing)<br>  stackPt: new StackPt(),<br>  memoryPt: new MemoryPt(),<br>  synthesizer: synthesizer,<br>};<br></code></pre></p>
+
+<p><strong>Dual State Structure:</strong></p>
+
+<p><li><strong>EVM State</strong>: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Stack</code>, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Memory</code> - Track actual execution values</li><br><li><strong><a href="synthesizer-terminology.md#synthesizer">Synthesizer</a> State</strong>: <a href="synthesizer-terminology.md#stackpt"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">StackPt</code></a>, <a href="synthesizer-terminology.md#memorypt"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">MemoryPt</code></a> - Track <a href="synthesizer-terminology.md#symbol-processing">symbolic</a> representations</li><br><li>Both states are maintained in parallel and verified for consistency</li></p>
+
+<p>---</p>
+
+<h3>Phase 3: Bytecode Execution</h3>
+
+<p><strong>What happens:</strong></p>
+
+<p><li>Each opcode triggers both EVM and Synthesizer handlers</li><br><li>Arithmetic ops → OperationHandler → Create placements</li><br><li>Storage ops → DataLoader → Buffer management</li><br><li>Memory ops → MemoryManager → Aliasing resolution</li><br><li>Consistency checks ensure EVM and Synthesizer stay synchronized</li></p>
+
+<p><strong>Detailed Flow:</strong></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>Interpreter.runStep()                 [interpreter.ts:384]
+   │
+   ├─► Parse opcode from bytecode
+   │
+   ├─► Execute Unified Handler         [opcodes/functions.ts]
+   │    │   (Contains both EVM + Synthesizer logic)
+   │    │
+   │    ├─► 1. EVM Logic: Update Stack, Memory, Storage
+   │    │
+   │    └─► 2. Synthesizer Logic: Create placements/symbols
+   │         │
+   │         ├─► Arithmetic ops
+   │         │    └─► OperationHandler.placeArith()
+   │         │         └─► Create ALU placement
+   │         │
+   │         ├─► Storage ops
+   │         │    └─► DataLoader.loadStorage()
+   │         │         └─► Add to PRV_IN buffer
+   │         │
+   │         └─► Memory ops
+   │              └─► MemoryManager.placeMemoryToStack()
+   │                   └─► Create reconstruction circuit
+   │
+   └─► Consistency Check               [interpreter.ts:441-449]
+        └─► Verify Stack values == StackPt values
+</code></pre>
+
+<p><strong>Key Code:</strong></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// interpreter.ts:384-449 - Opcode execution
+async runStep(opcodeObj?: OpcodeMapEntry): Promise&lt;void&gt; {
+  const opEntry = opcodeObj ?? this.lookupOpInfo(this._runState.opCode);
+  const opInfo = opEntry.opcodeInfo;
+
+<p>  // ... gas calculation and program counter advance ...</p>
+
+<p>  // Execute opcode handler (contains both EVM and Synthesizer logic)<br>  const opFn = opEntry.opHandler;</p>
+
+<p>  if (opInfo.isAsync) {<br>    await (opFn as AsyncOpHandler).apply(null, [this._runState, this.common]);<br>  } else {<br>    opFn.apply(null, [this._runState, this.common]);<br>  }</p>
+
+<p>  // Verify consistency between EVM and Synthesizer<br>  const stackVals = this._runState.stack.getStack();<br>  const stackPtVals = this._runState.stackPt.getStack().map(dataPt =&gt; dataPt.value);<br>  if (!(stackVals.length === stackPtVals.length &amp;&amp;<br>        stackVals.every((val, index) =&gt; val === stackPtVals[index]))) {<br>    console.log(<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Instruction: ${opInfo.name}</code>);<br>    console.log(<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">Stack values(right-newest): ${stackVals}</code>);<br>    console.log(<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">StackPt values(right-newest): ${stackPtVals}</code>);<br>    throw new Error(&#039;Synthesizer: Stack mismatch between EVM and Synthesizer&#039;);<br>  }<br>}</p>
+
+<p>// opcodes/functions.ts:95 - Handler definition (unified EVM + Synthesizer)<br>export const handlers: Map&lt;number, OpHandler&gt; = new Map([<br>  // 0x01: ADD<br>  [<br>    0x01,<br>    function (runState) {<br>      // 1. EVM execution (original EthereumJS logic)<br>      const [a, b] = runState.stack.popN(2);<br>      const r = mod(a + b, TWO_POW256);<br>      runState.stack.push(r);</p>
+
+<p>      // 2. Synthesizer execution (Tokamak addition)<br>      synthesizerArith(&#039;ADD&#039;, [a, b], r, runState);<br>    },<br>  ],<br>  // ... more opcodes<br>]);</p>
+
+<p>// Example: ADD operation creates a placement<br>// operationHandler.ts:80<br>public placeArith(name: ArithmeticOperator, inPts: DataPt[]): DataPt[] {<br>  const [subcircuitName, selector] = SUBCIRCUIT_MAPPING[name];  // &#039;ADD&#039; → [&#039;ALU1&#039;, 2n]<br>  const outPt = this.createOutput(name, inPts);</p>
+
+<p>  // Record placement in circuit<br>  this.provider.place(subcircuitName, [selectorPt, ...inPts], [outPt], name);<br>  return [outPt];<br>}</p>
+
+<p>// See also: <a href="synthesizer-terminology.md#datapt-data-point">DataPt</a>, <a href="synthesizer-terminology.md#subcircuit">Subcircuit</a>, <a href="synthesizer-terminology.md#selector">Selector</a><br></code></pre></p>
+
+<p><strong>Opcode Processing Examples:</strong></p>
+
+<p>For detailed code walkthroughs of opcode processing, see the following examples:</p>
+
+<p><li><strong><a href="./synthesizer-code-examples.md#1-arithmetic-operation-add">Example 1: Arithmetic Operation (ADD)</a></strong> - How arithmetic operations create placements</li><br><li><strong><a href="./synthesizer-code-examples.md#2-storage-load-sload">Example 2: Storage Load (SLOAD)</a></strong> - Buffer management and external data loading</li><br><li><strong><a href="./synthesizer-code-examples.md#3-memory-load-with-aliasing-mload">Example 3: Memory Load with Aliasing (MLOAD)</a></strong> - Memory aliasing resolution with reconstruction circuits</li></p>
+
+<p>---</p>
+
+<h3>Phase 4: Finalization</h3>
+
+<p><strong>What happens:</strong></p>
+
+<p><li>Placements map converted to output files</li><br><li>Witness calculated for each placement using WASM</li><br><li>Three JSON files generated for backend prover</li></ul></p>
+
+<p><strong>Detailed Flow:</strong></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>Finalizer.exec()                      [finalizer/index.ts:12]
+   │
+   ├─► PlacementRefactor.refactor()   [placementRefactor.ts:30]
+   │    └─► Optimize wire sizes
+   │
+   ├─► new Permutation()               [permutation.ts:84]
+   │    │
+   │    ├─► _buildPermGroup()          [permutation.ts:441]
+   │    │    ├─► Group wires by value
+   │    │    └─► Create parent-child relationships
+   │    │
+   │    └─► _correctPermutation()      [permutation.ts:368]
+   │         └─► Generate 3-entry cycles
+   │              └─► Write permutation.json
+   │
+   ├─► outputPlacementVariables()      [permutation.ts:123]
+   │    ├─► For each placement:
+   │    │    ├─► Load subcircuitN.wasm
+   │    │    ├─► generateSubcircuitWitness()  [permutation.ts:613]
+   │    │    │    └─► witnessCalculator.calculateWitness()
+   │    │    └─► Validate outputs
+   │    └─► Write placementVariables.json
+   │
+   └─► outputInstance()                [instance.ts]
+        └─► Write instance.json
+</code></pre>
+
+<p><strong>Key Code:</strong></p>
+
+<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>// finalizer/index.ts:12
+public async exec(_path?: string): Promise&lt;Permutation&gt; {
+  // 1. Optimize placements
+  const refactored = new PlacementRefactor(this.state).refactor();
+
+<p>  // 2. Generate wire connections and witness<br>  const permutation = new Permutation(refactored, _path);<br>  permutation.placementVariables = await permutation.outputPlacementVariables(<br>    refactored,<br>    _path,<br>  );</p>
+
+<p>  // 3. Write output files<br>  permutation.outputPermutation(_path);  // → permutation.json<br>  outputInstance(_path);                 // → instance.json<br>                                         // → placementVariables.json</p>
+
+<p>  return permutation;<br>}</p>
+
+<p>// permutation.ts:613 - Calculate witness for each placement<br>async generateSubcircuitWitness(placement: PlacementEntry): Promise&lt;bigint[]&gt; {<br>  const wasmPath = <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">./subcircuit${placement.subcircuitId}.wasm</code>;<br>  const witness = await witnessCalculator.calculateWitness(inputs);<br>  return witness;  // All internal circuit values<br>}<br></code></pre></p>
+
+<p><strong>Output Files:</strong></p>
+
+<p>1. <strong><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">permutation.json</code></strong> - Circuit topology (<a href="synthesizer-terminology.md#wire">wire</a> connections)</p>
+
+<p>   - Describes how wires between <a href="synthesizer-terminology.md#placement">placements</a> are connected<br>   - Uses N-entry cycle structure for equality constraints (<a href="synthesizer-terminology.md#permutation">Permutation</a>)<br>   - Used by Setup, Prove, Verify stages<br>   - Example: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">{ row: 13, col: 1, X: 14, Y: 3 }</code> means wire 13 in Placement 1 connects to wire 14 in Placement 3</p>
+
+<p>2. <strong><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">instance.json</code></strong> - Public/Private I/O values (<a href="synthesizer-terminology.md#instance">Instance</a>)</p>
+
+<p>   - Public input/output from <a href="synthesizer-terminology.md#pub-in-and-pub-out"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PUB_IN</code></a>/<a href="synthesizer-terminology.md#pub-in-and-pub-out"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PUB_OUT</code></a> buffers<br>   - Private input/output from <a href="synthesizer-terminology.md#prv-in-and-prv-out"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PRV_IN</code></a>/<a href="synthesizer-terminology.md#prv-in-and-prv-out"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">PRV_OUT</code></a> buffers<br>   - Complete <a href="synthesizer-terminology.md#witness">witness</a> arrays (<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a_pub</code>, <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">a_prv</code>)<br>   - Used by Prove stage</p>
+
+<p>3. <strong><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">placementVariables.json</code></strong> - Complete <a href="synthesizer-terminology.md#witness">witness</a> for all <a href="synthesizer-terminology.md#placement">placements</a><br>   - All intermediate values for each <a href="synthesizer-terminology.md#subcircuit">subcircuit</a> instance<br>   - Needed by prover to satisfy <a href="synthesizer-terminology.md#r1cs">R1CS</a> constraints<br>   - Maps to Tokamak zk-SNARK format</p>
+
+<p><strong>For detailed information on output file formats, see <a href="./synthesizer-output-files.md">Output Files Reference</a></strong><br></p>
+  
+  <hr style="margin-top: 60px; border: none; border-top: 1px solid #ddd;">
+  <p style="color: #7f8c8d; font-size: 0.9em;">
+    <em>이 문서는 <a href="https://YOUR-USERNAME.github.io/tokamak-zk-evm-docs">Tokamak zk-EVM Documentation</a>에서 변환되었습니다.</em>
+  </p>
+</body>
+</html>

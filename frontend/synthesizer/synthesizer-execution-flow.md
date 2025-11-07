@@ -2,12 +2,6 @@
 
 This document walks through how Synthesizer processes Ethereum transactions, showing the complete execution flow from input to output with practical examples.
 
-## What This Document Covers
-
-For detailed code references and implementation details, see the [Architecture documentation](./synthesizer/architecture.md) (coming soon).
-
-For conceptual explanations (What/Why), see the [main Synthesizer documentation](./synthesizer.md).
-
 ## Transaction Lifecycle Overview
 
 The following diagram shows the complete flow of a transaction through Synthesizer:
@@ -17,7 +11,7 @@ The following diagram shows the complete flow of a transaction through Synthesiz
 │                         SYNTHESIZER TRANSACTION FLOW                          │
 └──────────────────────────────────────────────────────────────────────────────┘
 
-    📥 INPUT                    ⚙️ PROCESSING                   📤 OUTPUT
+    INPUT                       PROCESSING                      OUTPUT
 
 ┌─────────────┐            ┌─────────────────┐           ┌──────────────┐
 │             │            │                 │           │              │
@@ -34,9 +28,9 @@ The following diagram shows the complete flow of a transaction through Synthesiz
 │─────────────│            ┌─────────────────┐           │              │
 │             │            │                 │           │   instance   │
 │   RPC Data  │            │  EVM + Symbol   │           │     .json    │
-│ (Block info)│            │   Execution     │           │              │
+│             │            │    Execution    │           │              │
 │ (On-demand) │            │                 │           │   placement  │
-│             │            │                 │           |   Variables  │
+│             │            │                 │           │   Variables  │
 └─────────────┘            │                 │           │      .json   │
                            │                 │           │              │
                            │                 │           │              │
@@ -56,7 +50,7 @@ The following diagram shows the complete flow of a transaction through Synthesiz
 **What flows through**:
 
 - **Transaction Hash** → Fetches transaction details and triggers re-execution
-- **Subcircuit Library** → Provides circuit templates (.wasm, .ts) used during execution
+- **Subcircuit Library** → Pre-compiled by QAP-compiler; provides circuit templates (.wasm, .ts) that Synthesizer uses
 - **RPC Provider** → Supplies blockchain state (storage, balances, code) on-demand throughout execution
 
 The transaction flows through **6 main steps**, which we'll explore in detail below.
@@ -65,32 +59,29 @@ The transaction flows through **6 main steps**, which we'll explore in detail be
 
 ## Step-by-Step Transaction Processing
 
-### Step 1: Setup & Preparation
+### Step 1: Prerequisites & Setup
 
-Before processing the transaction, Synthesizer prepares its environment:
+Before Synthesizer can process a transaction, the environment must be prepared:
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│  1. Compile Subcircuit Library (One-time setup)        │
+│  1. QAP-compiler: Compile Subcircuit Library           │
+│     (Prerequisite - one-time setup)                    │
 └────────────────────────────────────────────────────────┘
          │
-         │
-         │
-         │
-         ▼
-    Generate .wasm files (subcircuit0.wasm ... subcircuitN.wasm)
-    Generate TypeScript definitions (globalWireList.ts, subcircuitInfo.ts)
+         │  Generates .wasm files (subcircuit0.wasm ... subcircuitN.wasm)
+         │  Generates TypeScript definitions (globalWireList.ts, etc.)
          │
          ▼
 ┌────────────────────────────────────────────────────────┐
-│  2. Configure RPC Provider                             │
+│  2. Synthesizer: Configure RPC Provider                │
 └────────────────────────────────────────────────────────┘
          │
          │  Set up RPC endpoint for Ethereum Mainnet
          │
          ▼
 ┌────────────────────────────────────────────────────────┐
-│  3. Provide Transaction Hash                           │
+│  3. Synthesizer: Provide Transaction Hash              │
 └────────────────────────────────────────────────────────┘
          │
          │  TX: 0x123abc...
@@ -101,28 +92,30 @@ Before processing the transaction, Synthesizer prepares its environment:
 
 **What happens here:**
 
-1. **Subcircuit Library Compilation**: Circom compiles all the fundamental circuits (ALU1, bitify, XOR, etc.) into WebAssembly files. These are the building blocks that Synthesizer will use to construct the transaction-specific circuit.
+1. **Subcircuit Library** (Prerequisite): The [QAP-compiler](synthesizer-terminology.md#qap-compiler) compiles all fundamental subcircuits using Circom:
 
-2. **RPC Connection**: Synthesizer connects to Ethereum Mainnet via RPC to access blockchain state. This connection is essential because Synthesizer needs to:
+   - I/O interface buffers (LOAD/RETURN)
+   - Arithmetic and bitwise operations (ALU1, ALU2, XOR, etc.)
+   - Cryptographic primitives (bitify, etc.)
 
-   - Fetch transaction details (from, to, data, value)
-   - Access account states at the transaction's block height
-   - Query storage values on-demand during execution
-   - Retrieve block information (number, timestamp, coinbase, etc.)
+   These are compiled into WebAssembly files (`.wasm`) that Synthesizer uses as building blocks.
 
-3. **Transaction Selection**: You provide the transaction hash of an already-executed Ethereum transaction. Synthesizer will re-execute this transaction to generate the circuit.
+   > **Note**: This is a separate component from Synthesizer. See the QAP-compiler documentation for details (page to be added).
 
-**Important**: The RPC connection remains active throughout execution, not just during initialization. When the EVM encounters `SLOAD`, `BALANCE`, `EXTCODESIZE`, etc., it queries the blockchain state through RPC in real-time.
+2. **RPC Connection** (Synthesizer): Connect to Ethereum via RPC to access blockchain state. This is essential for:
+
+   - Fetching transaction details (from, to, data, value)
+   - Accessing account states at the transaction's block height
+   - Querying storage values on-demand during execution
+   - Retrieving block information (number, timestamp, coinbase, etc.)
+
+3. **Transaction Selection** (Synthesizer): Provide the transaction hash of an already-executed Ethereum transaction. Synthesizer will re-execute it to generate the circuit.
 
 ---
 
 ### Step 2: Initialization
 
-When you invoke Synthesizer, it creates the execution environment. The initialization process differs between standard L1 transactions and L2 state channel transactions.
-
-#### Standard L1 Initialization
-
-For regular Ethereum transactions:
+When you invoke Synthesizer, it creates the execution environment:
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -143,8 +136,8 @@ For regular Ethereum transactions:
 ┌────────────────────────────────────────────────────────┐
 │  Synthesizer creates internal managers:                │
 │  - StateManager (holds Placements map)                 │
-│  - ArithmeticManager (arithmetic ops)                  │
-│  - InstructionHandler (opcode handlers)                │
+│  - OperationHandler (arithmetic ops)                   │
+│  - DataLoader (external data)                          │
 │  - MemoryManager (memory aliasing)                     │
 │  - BufferManager (LOAD/RETURN buffers)                 │
 └────────────────────────────────────────────────────────┘
@@ -162,116 +155,25 @@ For regular Ethereum transactions:
     Ready to execute bytecode
 ```
 
-#### L2 State Channel Initialization
+**What happens here:**
 
-For L2 state channel transactions, use `createSynthesizerOptsForSimulationFromRPC()`:
-
-```typescript
-import { createSynthesizerOptsForSimulationFromRPC } from './interface/index.ts';
-
-const opts = await createSynthesizerOptsForSimulationFromRPC({
-  rpcUrl: 'https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY',
-  blockNumber: 12345678,
-  contractAddress: '0x...',              // L1 contract address
-  addressListL1: ['0x...'],              // L1 user addresses
-  publicKeyListL2: [pubKeyBytes],        // Corresponding L2 public keys
-  senderL2PrvKey: privateKeyBytes,       // EdDSA private key
-  txNonce: 0n,
-  userStorageSlots: [0, 1],              // Registered storage slots
-  callData: calldataBytes,
-});
-
-const synthesizer = new Synthesizer(opts);
-```
-
-This initialization:
-
-1. **Fetches L1 State**: Queries registered storage values from L1 contract
-2. **Maps L1→L2**: Converts L1 addresses to L2 public keys  
-3. **Constructs Initial Merkle Tree**: Builds 4-ary tree from registered keys
-4. **Signs Transaction**: Creates EdDSA signature with provided private key
-5. **Configures Custom Crypto**: Sets Poseidon as hash function (replaces Keccak256)
-
-The result is a `TokamakL2StateManager` that tracks state transitions via Merkle tree updates.
-
-**Reference**: See `interface/rpc/rpc.ts:64-101` for implementation.
-
-**What happens in both modes:**
-
-The EVM is instantiated with an attached Synthesizer. Think of it as running two virtual machines in parallel:
+The EVM is instantiated with an attached [Synthesizer](synthesizer-terminology.md#synthesizer). Think of it as running two virtual machines in parallel:
 
 - **Standard EVM**: Processes the transaction normally, updating stack/memory/storage
-- **Synthesizer**: Shadows the EVM execution, tracking everything as mathematical symbols
+- **Synthesizer**: Shadows the EVM execution, tracking everything as mathematical [symbols](synthesizer-terminology.md#symbol-processing)
 
 At this point:
 
-- The `Placements` map is initialized with 5 buffer placements (IDs 0-4)
-- Both `Stack` and `StackPt` are empty
-- Both `Memory` and `MemoryPt` are empty
-- For L2: Initial Merkle root is set as public input
+- The [Placements](synthesizer-terminology.md#placement) map is empty (will be populated during execution)
+- [Buffer placements](synthesizer-terminology.md#buffer-placements) (IDs 0-3) are pre-initialized for LOAD and RETURN operations
+- Both `Stack` and [StackPt](synthesizer-terminology.md#stackpt) are empty
+- Both `Memory` and [MemoryPt](synthesizer-terminology.md#memorypt) are empty
 
 ---
 
-### Step 3: Event-Driven Execution
+### Step 3: Bytecode Execution (Dual Processing)
 
-Synthesizer uses an **event-driven architecture** that hooks into the EVM's message lifecycle. The execution is divided into three phases, each triggered by EVM events:
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    EVENT-DRIVEN EXECUTION FLOW                       │
-└─────────────────────────────────────────────────────────────────────┘
-
-    📨 beforeMessage Event              🔄 step Event (repeated)           📬 afterMessage Event
-           │                                     │                                  │
-           ▼                                     ▼                                  ▼
-┌──────────────────────────┐      ┌──────────────────────────┐      ┌──────────────────────────┐
-│ _prepareSynthesizeTransaction │   │  _applySynthesizerHandler │      │   finalizeStorage()      │
-│                          │      │                          │      │                          │
-│ • Verify EdDSA signature │      │  For EACH opcode:        │      │ • Construct final        │
-│ • Recover ORIGIN address │      │  ┌─────────────────────┐ │      │   Merkle tree            │
-│ • Setup function selector│      │  │ EVM Handler         │ │      │ • Verify initial root    │
-│ • Prepare calldata cache │      │  │ • Execute opcode    │ │      │ • Output final root      │
-│                          │      │  │ • Update Stack      │ │      │ • Handle general storage │
-└──────────────────────────┘      │  └─────────────────────┘ │      └──────────────────────────┘
-           │                      │  ┌─────────────────────┐ │                  │
-           │                      │  │ Synthesizer Handler │ │                  │
-           ▼                      │  │ • Pop from StackPt  │ │                  ▼
-    Transaction ready             │  │ • Create placement  │ │         Circuit complete
-    for execution                 │  │ • Push to StackPt   │ │         with state proof
-                                  │  └─────────────────────┘ │
-                                  │  ┌─────────────────────┐ │
-                                  │  │ Consistency Check   │ │
-                                  │  │ Stack == StackPt?   │ │
-                                  │  └─────────────────────┘ │
-                                  └──────────────────────────┘
-```
-
-#### Phase 1: beforeMessage Event
-
-**Triggered**: Once, before transaction execution begins  
-**Handler**: `_prepareSynthesizeTransaction()` (`synthesizer.ts:142-161`)
-
-This phase prepares the transaction for execution:
-
-1. **Clear Call Stack**: Reset `callMemoryPtsStack` for new transaction context
-2. **Setup Function Interface**: 
-   - Extract function selector from calldata (first 4 bytes)
-   - Extract 9 function inputs (bytes 4-292, each 32 bytes)
-   - Store in `callMemoryPtsStack[0]` for main context access
-3. **Signature Verification** (L2 only):
-   - Recover sender's public key from EdDSA signature
-   - Verify signature matches transaction message
-   - Derive sender address from public key
-4. **Cache ORIGIN**: Store recovered/verified address as `cachedOrigin`
-
-**Key Point**: For L2 transactions, this phase performs signature verification **inside the circuit** by placing verification subcircuits. The signature validity becomes part of the zero-knowledge proof.
-
-#### Phase 2: step Event
-
-**Triggered**: For every opcode execution  
-**Handler**: `_applySynthesizerHandler()` (`synthesizer.ts:330-343`)
-
-This is the core execution loop. For **each opcode**, both the EVM and Synthesizer process it:
+Now the interpreter begins executing the transaction bytecode. For **every single opcode**, both the EVM and Synthesizer process it in parallel:
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -304,77 +206,51 @@ This is the core execution loop. For **each opcode**, both the EVM and Synthesiz
                         Continue to next opcode
 ```
 
-**Example**: Processing `ADD` instruction:
+**What happens here:**
+
+This is the core of Synthesizer. For example, when processing `ADD`:
 
 **EVM side:**
+
 1. Pops two values: `a = 10`, `b = 5`
 2. Computes: `result = 15`
 3. Pushes `15` to Stack
 
 **Synthesizer side:**
+
 1. Pops two symbols: `x`, `y` (where `x.value = 10`, `y.value = 5`)
-2. Creates a new placement: `ADD_placement = ALU1(selector, x, y)`
+2. Creates a new [placement](synthesizer-terminology.md#placement): `ADD_placement = ALU1(x, y)`
 3. Creates output symbol: `z` (where `z.value = 15`, `z.source = ADD_placement`)
-4. Pushes `z` to StackPt
-5. Records: `Placements[N] = { name: "ALU1", usage: "ADD", inPts: [sel, x, y], outPts: [z] }`
+4. Pushes `z` to [StackPt](synthesizer-terminology.md#stackpt)
+5. Records: `Placements[4] = { name: "ALU1", usage: "ADD", subcircuitId: 4, inPts: [x, y], outPts: [z] }`
 
 After every opcode, Synthesizer verifies that `Stack[i].value == StackPt[i].value` for all elements. This ensures the symbolic execution matches the actual execution.
 
-**Special Handling**: The `_preTasksForCalls()` method handles CALL-family instructions, setting up memory buffers for context switches.
-
 **Key insight**: Synthesizer is not simulating the EVM—it's **shadowing** it. The EVM computes the actual values, while Synthesizer builds a mathematical proof of how those values were derived.
-
-#### Phase 3: afterMessage Event
-
-**Triggered**: Once, after all opcodes complete  
-**Handler**: `finalizeStorage()` (`synthesizer.ts:163-278`)
-
-This phase finalizes the transaction's state changes:
-
-1. **Complete Registered Storage Access**:
-   - For each registered key that wasn't accessed, perform cold read
-   - Ensures all registered slots are tracked in circuit
-
-2. **Build Initial Merkle Tree**:
-   ```
-   For each registered key:
-     leaf = Poseidon(index, key, initial_value, 0)
-   
-   Compute tree bottom-up:
-     Level 0: 64 leaves → 16 nodes (Poseidon of 4 leaves each)
-     Level 1: 16 nodes → 4 nodes
-     Level 2: 4 nodes → 1 node (would be root, but we pad to 4)
-     Level 3: Verify 4 padded nodes match INI_MERKLE_ROOT
-   ```
-
-3. **Verify Initial Root**:
-   - Place `VerifyMerkleProof` subcircuit
-   - Constrain computed root equals `INI_MERKLE_ROOT` (public input)
-
-4. **Build Final Merkle Tree**:
-   - Use same process but with **final** storage values
-   - Compute root from updated leaves
-
-5. **Output Final Root**:
-   - Add final root to `RES_MERKLE_ROOT` buffer (public output)
-   - This proves the state transition is valid
-
-6. **Handle General Storage**:
-   - For non-registered keys, find last write operation
-   - Add to `OTHER_CONTRACT_STORAGE_OUT` buffer
-
-**Null Node Optimization**: Empty leaves are replaced with precomputed null hashes (`NULL_POSEIDON_LEVEL0` through `NULL_POSEIDON_LEVEL3`), avoiding redundant Poseidon computations.
-
-**Key Point**: This phase creates a cryptographic proof of state transition. Verifiers can confirm:
-- Initial state matches expected (via `INI_MERKLE_ROOT`)
-- Final state is correctly computed (via `RES_MERKLE_ROOT`)
-- All state changes are accounted for
 
 ---
 
 ### Step 4: Symbol Loading & Returning
 
-Throughout execution, Synthesizer needs to convert between external values and internal symbols:
+**This is the heart of Synthesizer**: converting between concrete values and [symbolic representations](synthesizer-terminology.md#symbol-processing).
+
+#### Why This Conversion Is Essential
+
+**The Synthesizer's unique challenge**: Unlike traditional zk-proof systems that work with fixed circuits, Synthesizer must handle **arbitrary EVM transactions** where the computation path is unknown until runtime.
+
+Without [symbol](synthesizer-terminology.md#symbol-processing) conversion, Synthesizer cannot:
+
+1. **Track data flow through EVM opcodes**: When `SLOAD` reads storage, how does that value propagate through `ADD`, `MUL`, and eventually to `SSTORE`? Symbols create a traceable chain.
+
+2. **Distinguish transaction-level privacy**: EVM has no concept of "public" vs "private" data. Synthesizer's buffer system enables selective disclosure at the transaction level—something standard EVMs cannot do.
+
+3. **Generate circuits dynamically**: The circuit structure depends on which opcodes execute. Symbols let Synthesizer build the circuit **while** the EVM runs, not before.
+
+4. **Prove state transitions without exposing state**: Storage values must remain private, but state changes must be provable. Symbols bridge this gap by representing values mathematically.
+
+#### How Symbol Conversion Works
+
+Throughout execution, Synthesizer maintains a bidirectional bridge between two worlds:
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -419,26 +295,71 @@ Throughout execution, Synthesizer needs to convert between external values and i
 └────────────────────────────────────────────────────────┘
 ```
 
-**What happens here:**
+#### The Conversion Process
 
-Buffers act as the **interface** between the external world (Ethereum state) and the internal circuit world (symbols):
+[Buffers](synthesizer-terminology.md#buffer-placements) act as the **interface** between the external world (Ethereum state) and the internal circuit world (symbols):
 
-- **LOAD Buffer** (Placement IDs 0, 2): Takes concrete values and produces symbols
+**LOAD Buffers** ([Placements](synthesizer-terminology.md#placement) 0, 2): **External Values → Symbols**
 
-  - Public inputs: calldata, block info, msg.sender (Placement 0)
-  - Private inputs: storage values, account states (Placement 2)
+When the EVM needs external data, Synthesizer:
 
-- **RETURN Buffer** (Placement IDs 1, 3): Takes symbols and produces concrete outputs
-  - Public outputs: logs, return data (Placement 1)
-  - Private outputs: storage updates (Placement 3)
+1. Fetches the concrete value (e.g., `storage[key] = 0x42`)
+2. Creates a [DataPt](synthesizer-terminology.md#datapt-data-point) symbol tracking this value
+3. Assigns it a [wire index](synthesizer-terminology.md#wire-index) in the buffer placement
+4. Returns the symbol for use in subsequent operations
 
-This is crucial for zero-knowledge proofs: public inputs/outputs are revealed, while private inputs/outputs remain hidden.
+- **[PUB_IN](synthesizer-terminology.md#pub-in-and-pub-out)** (Placement 0): Public inputs
+  - Examples: `msg.sender`, `msg.value`, calldata, block info
+  - Visible to everyone during verification
+- **[PRV_IN](synthesizer-terminology.md#prv-in-and-prv-out)** (Placement 2): Private inputs
+  - Examples: storage values, account balances, nonces
+  - Hidden from verifier, known only to prover
+
+**TRANSFORMATION** (Placements 4+): **Symbols → Transformed Symbols**
+
+After loading symbols, they flow through EVM opcodes that create transformation placements:
+
+1. Takes input symbols from previous operations (LOAD buffers or other placements)
+2. Creates a new placement representing the operation ([subcircuit](synthesizer-terminology.md#subcircuit) instance)
+3. Generates output symbols with new values and wire indices
+4. Pushes transformed symbols to [StackPt](synthesizer-terminology.md#stackpt) for subsequent operations
+
+- **Arithmetic Operations**: ADD, MUL, SUB, DIV, MOD
+  - Example: `DataPt{value: 100, source: 2}` → ADD → `DataPt{value: 110, source: 4}`
+- **Bitwise Operations**: AND, OR, XOR, SHL, SHR
+  - Example: `DataPt{value: 0xFF, source: 4}` → AND → `DataPt{value: 0x0F, source: 5}`
+- **Comparison Operations**: LT, GT, EQ, ISZERO
+  - Example: `DataPt{value: 100, source: 5}` → GT → `DataPt{value: 1, source: 6}`
+- **Memory Operations**: MLOAD, MSTORE (may create multiple placements for [data aliasing](synthesizer-terminology.md#data-aliasing))
+  - Example: Multiple symbols combined → `DataPt{value: reconstructed, source: 7}`
+
+Each transformation creates a traceable chain: `source` field points to the placement that created the symbol, enabling complete data flow tracking from LOAD to RETURN.
+
+**RETURN Buffers** (Placements 1, 3): **Symbols → External Values**
+
+When the EVM produces outputs, Synthesizer:
+
+1. Takes the final symbol (result of all transformations)
+2. Adds it to the buffer placement's input wires
+3. Records the concrete value for [witness](synthesizer-terminology.md#witness) generation
+4. Maintains the symbol-to-value mapping
+
+- **PUB_OUT** (Placement 1): Public outputs
+  - Examples: logs, return data, events
+  - Visible to everyone during verification
+- **PRV_OUT** (Placement 3): Private outputs
+  - Examples: storage updates, internal state changes
+  - Hidden from verifier, known only to prover
 
 ---
 
-### Step 5: Memory Aliasing Resolution
+### Step 5: Data Aliasing Resolution
 
-One of Synthesizer's most complex tasks is tracking overlapping memory writes:
+One of Synthesizer's most complex tasks is resolving **data aliasing**—when the same memory region is referenced in different ways. This occurs in three main scenarios:
+
+#### Scenario 1: Overlapping Memory Writes
+
+When multiple writes affect the same memory location:
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -488,18 +409,195 @@ One of Synthesizer's most complex tasks is tracking overlapping memory writes:
 └────────────────────────────────────────────────────────┘
 ```
 
-**What happens here:**
+#### Scenario 2: Offset Mismatch (No Overlapping)
 
-Traditional EVM simply overwrites memory and returns the latest value. But Synthesizer must prove **how** that value was computed from the original symbols.
+Even without overlapping writes, offset differences require aliasing resolution:
 
-The 2D structure of `MemoryPt` (offset × time) allows Synthesizer to:
+```
+MSTORE(0x03, X)  // Stores 32 bytes at 0x03-0x23
+MLOAD(0x00)      // Loads 32 bytes from 0x00-0x20
 
-1. Track all writes to each memory location
-2. Detect overlaps when reading
-3. Generate subcircuits (using SHR, SHL, AND, OR) to reconstruct the correct value
-4. Prove the reconstruction is correct
+Memory Layout:
+0x00 0x01 0x02 [0x03 ... 0x1F] 0x20 0x21 0x22 0x23
+[??  ??  ??] [    X (32 bytes)    ] [??  ??  ??]
+[        Y (32 bytes)         ]
 
-This is why memory operations can generate multiple placements—they need to prove data aliasing.
+Result Y = [3 garbage bytes] + [first 29 bytes of X]
+```
+
+The loaded value Y is **not** the same as X, even though there's no overlapping. Synthesizer must:
+
+1. Detect the 3-byte offset difference
+2. Extract the relevant portion of X
+3. Combine with uninitialized memory (garbage bytes)
+4. Generate circuits to prove the reconstruction
+
+#### Scenario 3: Calldata Chunking (Reverse Process)
+
+When calldata exceeds 32 bytes, it must be chunked into multiple DataPts:
+
+```javascript
+// Solidity function
+function transfer(address to, uint256 amount) {
+    // Calldata: 68 bytes total
+    // 0x00-0x04: function selector (4 bytes)
+    // 0x04-0x24: to address (32 bytes)
+    // 0x24-0x44: amount (32 bytes)
+}
+
+// Problem: DataPt can only handle 32 bytes!
+```
+
+**Current Implementation (Alpha)**:
+
+The current Synthesizer uses EVM's chunked result as an oracle without proving the chunking process:
+
+```typescript
+// See: instructionHandlers.ts:606
+case 'CALLDATALOAD': {
+  // Uses EVM result directly (oracle approach)
+  dataPt = runState.synthesizer.loadEnvInf(
+    runState.env.address.toString(),
+    'Calldata(User)',
+    runState.stack.peek(1)[0],  // EVM's computed value
+    i,
+  );
+}
+```
+
+**Limitation**: This approach doesn't prove how calldata was chunked, making it an incomplete zk-proof.
+
+**Next Version (Beta - In Development)**:
+
+The upcoming version will create a dedicated CallData MemoryPt to store function selector and arguments as separate DataPts, enabling complete proof of the chunking process:
+
+```typescript
+// Beta approach (in development)
+calldataMemoryPt.write(0x00, 4, functionSelectorPt);   // Provable!
+calldataMemoryPt.write(0x04, 32, addressPt);           // Provable!
+calldataMemoryPt.write(0x24, 32, amountPt);            // Provable!
+
+// CALLDATALOAD(0x04) → calldataMemoryPt.getDataAlias(0x04, 32) → addressPt
+```
+
+**Reference**: [CALLDATALOAD implementation](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/eb0073488d5db6ca5219fc911b676869267c521f/packages/frontend/synthesizer/src/tokamak/core/synthesizer/handlers/instructionHandlers.ts#L606)
+
+#### Scenario 4: Multi-Chunk Memory Operations
+
+When operations like **KECCAK256** or **LOG** need to read more than 32 bytes, the memory is chunked into multiple 32-byte segments, each requiring separate aliasing resolution:
+
+```
+KECCAK256(offset=0x00, length=0x50)  // Hash 80 bytes
+
+Chunking process:
+Chunk 1: getDataAlias(0x00, 32) → DataPt A
+Chunk 2: getDataAlias(0x20, 32) → DataPt B
+Chunk 3: getDataAlias(0x40, 16) → DataPt C (partial chunk)
+
+Each chunk independently resolves aliasing!
+```
+
+**Key characteristics**:
+
+- Memory divided into 32-byte chunks (last chunk may be smaller)
+- Each chunk calls `getDataAlias` independently
+- Multiple placements may be generated for a single operation
+- Used by: KECCAK256, LOG0-LOG4
+
+**Implementation**: See [chunkMemory function](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/utils/functions.ts#L8-L38)
+
+#### Scenario 5: Memory-to-Memory Copy Operations
+
+Operations like **MCOPY**, **CODECOPY**, **EXTCODECOPY**, and **RETURNDATACOPY** copy data from one memory region to another, potentially causing aliasing in both source and destination:
+
+```
+Memory before:
+0x00-0x20: DataPt X (32 bytes)
+0x20-0x40: DataPt Y (32 bytes)
+
+MCOPY(dst=0x10, src=0x00, length=0x30)
+// Copies 48 bytes from 0x00-0x30 to 0x10-0x40
+
+Result after copy:
+0x10-0x20: Partial X (offset mismatch!)
+0x20-0x30: Rest of X + partial Y (overlapping!)
+0x30-0x40: Rest of Y
+```
+
+**Key characteristics**:
+
+- Both source and destination can have aliasing issues
+- Uses `placeMemoryToMemory` instead of `placeMemoryToStack`
+- Source region aliasing must be resolved before copying
+- Destination region may overlap with source (e.g., MCOPY with overlapping regions)
+
+**Implementation**: See [copyMemoryRegion](https://github.com/tokamak-network/Tokamak-zk-EVM/blob/main/packages/frontend/synthesizer/src/tokamak/pointers/memoryPt.ts#L90-L132)
+
+#### Scenario 6: External Code Copy with Chunking
+
+**EXTCODECOPY** copies external contract bytecode to memory, chunking it into manageable pieces:
+
+```typescript
+// Copying 100 bytes of external contract code
+EXTCODECOPY(address, memOffset=0x00, codeOffset=0x00, length=0x64)
+
+Chunking process:
+while (chunkedLength > 0) {
+  chunkSize = min(chunkedLength, 32);
+  dataPt = prepareEXTCodePt(address, codeOffset, chunkSize);
+  memoryPt.write(memOffset, chunkSize, dataPt);
+
+  chunkedLength -= chunkSize;
+  memOffset += chunkSize;
+  codeOffset += chunkSize;
+}
+```
+
+**Key characteristics**:
+
+- External code is fetched and chunked into 32-byte pieces
+- Each chunk is written to memory as a separate DataPt
+- Subsequent MLOAD operations may need to resolve aliasing across these chunks
+
+#### Scenario 7: Uninitialized Memory Access (Edge Case)
+
+**Note**: This is technically not "aliasing resolution" but rather a **default value handling mechanism** when no DataPts exist for the requested memory region.
+
+When **MLOAD** reads from memory that has never been written to, `getDataAlias` returns an empty array, and a zero value is loaded:
+
+```
+// No MSTORE operations performed
+MLOAD(0x00)  // Reading uninitialized memory
+
+getDataAlias(0x00, 32) returns []
+→ loadAuxin(0) is used (zero value)
+```
+
+**Key characteristics**:
+
+- `dataAliasInfos.length === 0` indicates uninitialized memory
+- Synthesizer loads auxiliary input with value 0
+- Represents "garbage" or uninitialized memory in EVM semantics
+- **No subcircuit generation** (unlike Scenarios 1-6)
+- Simple default value provision, not aliasing resolution
+
+**Why it's different from aliasing resolution**:
+
+- **Scenarios 1-6**: Multiple DataPts exist → resolve relationships → generate subcircuits
+- **Scenario 7**: No DataPts exist → provide default value → no subcircuits
+
+#### How Aliasing Resolution Works
+
+Traditional EVM simply overwrites memory and returns the latest value. But Synthesizer must prove **how** that value was computed from the original [symbols](synthesizer-terminology.md#symbol-processing).
+
+The 2D structure of [MemoryPt](synthesizer-terminology.md#memorypt) (offset × time) allows Synthesizer to:
+
+1. Track all writes to each memory location with timestamps
+2. Detect overlaps and offset mismatches when reading
+3. Generate [subcircuits](synthesizer-terminology.md#subcircuit) (using SHR, SHL, AND, OR) to reconstruct the correct value
+4. Prove the reconstruction is mathematically correct
+
+This is why memory operations can generate multiple [placements](synthesizer-terminology.md#placement)—they need to prove [data aliasing](synthesizer-terminology.md#data-aliasing) resolution in all its forms.
 
 ---
 
@@ -580,23 +678,23 @@ After bytecode execution completes, Synthesizer generates the final output files
 
 **What happens here:**
 
-The Finalizer converts the `Placements` map into three critical files:
+The [Finalizer](synthesizer-terminology.md#finalizer) converts the `Placements` map into three critical files:
 
 1. **permutation.json**: Describes the circuit topology
 
-   - How subcircuit wires are connected
-   - PLONK-style Permutation Argument
+   - How subcircuit [wires](synthesizer-terminology.md#wire) are connected
+   - PLONK-style [Permutation](synthesizer-terminology.md#permutation) Argument
    - Used by Prove, Verify stages
 
 2. **instance.json**: Contains the actual input/output values
 
    - Public values are revealed (anyone can see)
    - Private values remain hidden (only prover knows)
-   - Contains both buffer data and complete witness arrays
+   - Contains both buffer data and complete [witness](synthesizer-terminology.md#witness) arrays
 
-3. **placementVariables.json**: Full witness for proof generation
-   - All intermediate values for each subcircuit
+3. **placementVariables.json**: Full [witness](synthesizer-terminology.md#witness) for proof generation
+   - All intermediate values for each [subcircuit](synthesizer-terminology.md#subcircuit)
    - Needed by the prover to satisfy constraints
-   - Maps to R1CS format used by Tokamak zk-SNARK
+   - Maps to [R1CS](synthesizer-terminology.md#r1cs) format used by Tokamak zk-SNARK
 
 These files are then passed to the backend Rust prover, which generates the actual zero-knowledge proof.
