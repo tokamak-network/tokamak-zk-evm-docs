@@ -115,47 +115,97 @@ Before Synthesizer can process a transaction, the environment must be prepared:
 
 ### Step 2: Initialization
 
-When you invoke Synthesizer, it creates the execution environment:
+Synthesizer supports two initialization modes depending on transaction type:
+
+#### Standard L1 Initialization
+
+For regular Ethereum mainnet transactions:
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│  createEVM() is called                                 │
-└────────────────────────────────────────────────────────┘
-         │
-         │  Fetch transaction data from RPC
-         │  Fetch block data from RPC
-         │
-         ▼
-┌────────────────────────────────────────────────────────┐
-│  EVM instance created                                  │
-│  - Synthesizer instance attached                       │
-│  - Opcode handlers registered                          │
-└────────────────────────────────────────────────────────┘
-         │
-         ▼
-┌────────────────────────────────────────────────────────┐
-│  Synthesizer creates internal managers:                │
-│  - StateManager (holds Placements map)                 │
-│  - OperationHandler (arithmetic ops)                   │
-│  - DataLoader (external data)                          │
-│  - MemoryManager (memory aliasing)                     │
-│  - BufferManager (LOAD/RETURN buffers)                 │
-└────────────────────────────────────────────────────────┘
-         │
-         ▼
-┌────────────────────────────────────────────────────────┐
-│  Interpreter created with:                             │
-│  - Stack (EVM values)                                  │
-│  - StackPt (Synthesizer symbols)                       │
-│  - Memory (EVM bytes)                                  │
-│  - MemoryPt (Synthesizer symbols with time tracking)   │
-└────────────────────────────────────────────────────────┘
-         │
-         ▼
-    Ready to execute bytecode
+│  createSynthesizerOptsForSimulationFromRPC()           │
+│  - mode: 'normal'                                      │
+└────────────────────────┬───────────────────────────────┘
+                         │
+                         ▼
+         ┌───────────────────────────────────────┐
+         │  Fetch transaction from RPC           │
+         │  - txHash: 0x...                      │
+         │  - Parse: from, to, data, value       │
+         └───────────────┬───────────────────────┘
+                         │
+                         ▼
+         ┌───────────────────────────────────────┐
+         │  Create RPCStateManager               │
+         │  - Connect to Ethereum RPC            │
+         │  - Fetch block at tx height           │
+         └───────────────┬───────────────────────┘
+                         │
+                         ▼
+         ┌───────────────────────────────────────┐
+         │  Create EVM with Synthesizer          │
+         │  - Standard crypto: Keccak256, ECDSA  │
+         │  - StateManager: RPCStateManager      │
+         └───────────────┬───────────────────────┘
+                         │
+                         ▼
+                  Ready to execute
 ```
 
-**What happens here:**
+#### L2 State Channel Initialization
+
+For L2 transactions with EdDSA signatures and Merkle tree state:
+
+```
+┌────────────────────────────────────────────────────────┐
+│  createSynthesizerOptsForSimulationFromRPC()           │
+│  - mode: 'l2-state-channel'                           │
+│  - l1Address, l1ChannelNonce, l2CallIdx               │
+│  - l2TxSerialized (EdDSA-signed)                      │
+│  - l2State: {registeredKeys, stateValues}             │
+└────────────────────────┬───────────────────────────────┘
+                         │
+                         ▼
+         ┌───────────────────────────────────────┐
+         │  Parse TokamakL2Tx                    │
+         │  - Extract EdDSA signature (v,r,s)    │
+         │  - Extract sender public key          │
+         └───────────────┬───────────────────────┘
+                         │
+                         ▼
+         ┌───────────────────────────────────────┐
+         │  Create TokamakL2StateManager         │
+         │  - Connect to L1 contract via RPC     │
+         │  - Load registered keys (max 64)      │
+         │  - Build initial Merkle tree (4-ary)  │
+         │  - Compute initial root               │
+         └───────────────┬───────────────────────┘
+                         │
+                         ▼
+         ┌───────────────────────────────────────┐
+         │  Create EVM with custom crypto        │
+         │  - keccak256 → poseidon               │
+         │  - ecrecover → getEddsaPublicKey      │
+         │  - StateManager: TokamakL2StateManager│
+         └───────────────┬───────────────────────┘
+                         │
+                         ▼
+                  Ready to execute
+```
+
+**Key Differences**:
+
+| Aspect              | L1 (Standard)           | L2 (State Channel)        |
+| ------------------- | ----------------------- | ------------------------- |
+| **Transaction Type** | Standard Ethereum TX    | TokamakL2Tx (EdDSA)       |
+| **State Manager**    | RPCStateManager         | TokamakL2StateManager     |
+| **Hash Function**    | Keccak256               | Poseidon                  |
+| **Signature Scheme** | ECDSA (secp256k1)       | EdDSA (JubJub)            |
+| **State Tracking**   | Full Ethereum state     | Merkle tree (64 leaves)   |
+| **Pre-execution**    | None                    | Verify EdDSA signature    |
+| **Post-execution**   | None                    | Finalize Merkle tree      |
+
+**What happens in both modes:**
 
 The EVM is instantiated with an attached [Synthesizer](synthesizer-terminology.md#synthesizer). Think of it as running two virtual machines in parallel:
 
@@ -171,62 +221,242 @@ At this point:
 
 ---
 
-### Step 3: Bytecode Execution (Dual Processing)
+### Step 3: Event-Driven Execution
 
-Now the interpreter begins executing the transaction bytecode. For **every single opcode**, both the EVM and Synthesizer process it in parallel:
+Synthesizer uses an **event-driven architecture** that hooks into the EVM's message lifecycle. Transaction execution is divided into three phases:
 
 ```
-┌────────────────────────────────────────────────────────────────────┐
-│            For each opcode in transaction bytecode:                │
-└────────────────────────────────────────────────────────────────────┘
-                                 │
-                 ┌───────────────┴───────────────┐
-                 │                               │
-                 ▼                               ▼
-    ┌─────────────────────────┐     ┌─────────────────────────┐
-    │   EVM Handler executes  │     │ Synthesizer Handler     │
-    │                         │     │      executes           │
-    │  • Pop from Stack       │     │  • Pop from StackPt     │
-    │  • Compute result       │     │  • Create placement     │
-    │  • Push to Stack        │     │    with output symbol   │
-    │  • Update Memory/Storage│     │  • Push to StackPt      │
-    │                         │     │                         │
-    └─────────────┬───────────┘     └───────────┬─────────────┘
-                  │                             │
-                  └──────────────┬──────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────────────┐
-                    │  Consistency Check      │
-                    │  Stack == StackPt ?     │
-                    │  If not → Error         │
-                    └────────────┬────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                  TRANSACTION EXECUTION LIFECYCLE                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  PHASE 1: Pre-Execution (beforeMessage event)                       │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  EVM fires: beforeMessage(message)                                  │
+│       │                                                              │
+│       ▼                                                              │
+│  Synthesizer._prepareSynthesizeTransaction()                        │
+│       │                                                              │
+│       ├─► For L1: No action                                         │
+│       │                                                              │
+│       └─► For L2:                                                   │
+│           ├─► Parse TokamakL2Tx from message                        │
+│           ├─► Extract EdDSA signature (v, r, s)                     │
+│           ├─► Verify signature with eddsaVerify()                   │
+│           ├─► Create VerifyEddsaSignature placement                 │
+│           └─► Load initial Merkle tree root → PUBLIC_IN buffer      │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
                                  │
                                  ▼
-                        Continue to next opcode
+┌─────────────────────────────────────────────────────────────────────┐
+│  PHASE 2: Bytecode Execution (step event, fired for EACH opcode)   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  For each opcode in transaction bytecode:                           │
+│                                                                      │
+│  EVM fires: step(interpreterStep)                                   │
+│       │                                                              │
+│       ▼                                                              │
+│  Synthesizer._applySynthesizerHandler()                             │
+│       │                                                              │
+│       ├─► Extract opcode and RunState                               │
+│       │                                                              │
+│       └─► Execute unified handler (EVM + Synthesizer):              │
+│           │                                                          │
+│           ├─► EVM Side:                                             │
+│           │    ├─ Pop from Stack                                    │
+│           │    ├─ Compute result (e.g., ADD: 10+5=15)               │
+│           │    ├─ Push to Stack                                     │
+│           │    └─ Update Memory/Storage                             │
+│           │                                                          │
+│           ├─► Synthesizer Side:                                     │
+│           │    ├─ Pop from StackPt (get symbols)                    │
+│           │    ├─ Create placement (e.g., ALU1 for ADD)             │
+│           │    ├─ Generate output symbol                            │
+│           │    └─ Push to StackPt                                   │
+│           │                                                          │
+│           └─► Verify Consistency:                                   │
+│                Stack[i].value == StackPt[i].value for all i         │
+│                                                                      │
+│  Continue to next opcode...                                         │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  PHASE 3: Post-Execution (afterMessage event)                       │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  EVM fires: afterMessage(result)                                    │
+│       │                                                              │
+│       ▼                                                              │
+│  Synthesizer.finalizeStorage()                                      │
+│       │                                                              │
+│       ├─► For L1: No action                                         │
+│       │                                                              │
+│       └─► For L2:                                                   │
+│           ├─► Iterate storagePt entries                             │
+│           ├─► Update Merkle tree leaves with new values             │
+│           ├─► Recompute Merkle tree from bottom to top              │
+│           ├─► Compute final Merkle root                             │
+│           └─► Add final root → PUBLIC_OUT buffer                    │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+                                 │
+                                 ▼
+                          Execution Complete
 ```
 
-**What happens here:**
+**Key Phases Explained:**
 
-This is the core of Synthesizer. For example, when processing `ADD`:
+#### Phase 1: Pre-Execution (`beforeMessage`)
 
-**EVM side:**
+**Location**: `synthesizer.ts:48-89`
 
-1. Pops two values: `a = 10`, `b = 5`
-2. Computes: `result = 15`
-3. Pushes `15` to Stack
+**Purpose**: Prepare for transaction execution, verify signatures (L2 only)
 
-**Synthesizer side:**
+**For L1 transactions**: This phase does nothing—standard Ethereum transactions are verified by the EVM's built-in ECDSA verification.
 
-1. Pops two symbols: `x`, `y` (where `x.value = 10`, `y.value = 5`)
-2. Creates a new [placement](synthesizer-terminology.md#placement): `ADD_placement = ALU1(x, y)`
-3. Creates output symbol: `z` (where `z.value = 15`, `z.source = ADD_placement`)
-4. Pushes `z` to [StackPt](synthesizer-terminology.md#stackpt)
-5. Records: `Placements[4] = { name: "ALU1", usage: "ADD", subcircuitId: 4, inPts: [x, y], outPts: [z] }`
+**For L2 transactions**: 
+1. Parse `TokamakL2Tx` from the message
+2. Extract EdDSA signature components (`v`, `r`, `s`)
+3. Verify signature using `eddsaVerify(msgHash, pubKey, randomizer, signature)`
+4. If invalid → throw error
+5. If valid → Create `VerifyEddsaSignature` [placement](synthesizer-terminology.md#placement) in circuit
+6. Load initial Merkle tree root from `TokamakL2StateManager`
+7. Add initial root to `PUBLIC_IN` buffer (wire index 0)
 
-After every opcode, Synthesizer verifies that `Stack[i].value == StackPt[i].value` for all elements. This ensures the symbolic execution matches the actual execution.
+**Example code**:
+```typescript
+if (this.cachedOpts.mode === 'l2-state-channel') {
+  const tx = message.tx as TokamakL2Tx;
+  const isValid = eddsaVerify(
+    tx.getHashedMessageToSign(),
+    tx.senderPubKey,
+    tx.eddsaRandomizer,
+    tx.eddsaSignature
+  );
+  
+  if (!isValid) {
+    throw new Error('Invalid EdDSA signature');
+  }
+  
+  // Create placement for signature verification
+  this._state.placements.set(placementId, {
+    name: 'VerifyEddsaSignature',
+    usage: 'EDDSA_VERIFY',
+    inPts: [pubKeyX, pubKeyY, msgHash, randomizer, signature],
+    outPts: [isValidPt]
+  });
+}
+```
 
-**Key insight**: Synthesizer is not simulating the EVM—it's **shadowing** it. The EVM computes the actual values, while Synthesizer builds a mathematical proof of how those values were derived.
+---
+
+#### Phase 2: Bytecode Execution (`step`)
+
+**Location**: `interpreter.ts:384-449` (EVM) + opcode handlers
+
+**Purpose**: Execute each opcode with dual EVM + Synthesizer processing
+
+**Fired**: Once for **every single opcode** in the transaction bytecode
+
+**Process**:
+1. EVM parses the current opcode
+2. Looks up the **unified handler** (contains both EVM and Synthesizer logic)
+3. Executes handler:
+   - **EVM side**: Updates `Stack`, `Memory`, `Storage` with actual values
+   - **Synthesizer side**: Creates [placements](synthesizer-terminology.md#placement), updates [StackPt](synthesizer-terminology.md#stackpt), [MemoryPt](synthesizer-terminology.md#memorypt) with symbols
+4. Verifies consistency: `Stack[i].value == StackPt[i].value` for all positions
+5. Increments program counter, continues to next opcode
+
+**Example: ADD opcode**
+
+```typescript
+// opcodes/functions.ts
+[0x01, function (runState) {
+  // ========== EVM Side ==========
+  const [a, b] = runState.stack.popN(2);  // Pop actual values
+  const result = (a + b) % (2n ** 256n);  // Compute
+  runState.stack.push(result);            // Push result
+
+  // ========== Synthesizer Side ==========
+  const [aPt, bPt] = runState.stackPt.popN(2);  // Pop symbols
+  const [resultPt] = runState.synthesizer.placeArith('ADD', [aPt, bPt]);
+  runState.stackPt.push(resultPt);  // Push result symbol
+  
+  // Record placement:
+  // Placements[4] = {
+  //   name: "ALU1",
+  //   usage: "ADD",
+  //   inPts: [selectorPt, aPt, bPt],
+  //   outPts: [resultPt]
+  // }
+}]
+```
+
+**Key insight**: Every opcode creates circuit nodes (placements) **while** the EVM executes. Synthesizer is not simulating—it's **shadowing** the EVM in real-time.
+
+---
+
+#### Phase 3: Post-Execution (`afterMessage`)
+
+**Location**: `synthesizer.ts:163-278`
+
+**Purpose**: Finalize circuit generation, compute final state commitment (L2 only)
+
+**For L1 transactions**: This phase does nothing—the circuit is complete after bytecode execution.
+
+**For L2 transactions**:
+1. Retrieve all modified storage entries from `storagePt`
+2. For each registered key:
+   - Get leaf index in Merkle tree
+   - Update leaf with new storage value
+3. Recompute Merkle tree from leaves to root
+4. Compute final Merkle root
+5. Add final root to `PUBLIC_OUT` buffer (visible to verifier)
+
+**Example code**:
+```typescript
+if (this.cachedOpts.mode === 'l2-state-channel') {
+  const stateManager = this.cachedOpts.stateManager as TokamakL2StateManager;
+  
+  // Update all modified storage
+  for (const [key, valuePt] of this._state.storagePt.entries()) {
+    const leafIndex = stateManager.getMTIndex(key);
+    stateManager.updateLeaf(leafIndex, valuePt.value);
+  }
+  
+  // Compute final root
+  const finalRoot = stateManager.getUpdatedMerkleTreeRoot();
+  
+  // Add to PUBLIC_OUT buffer
+  const finalRootPt = DataPointFactory.create({
+    value: finalRoot,
+    source: PUBLIC_OUT_PLACEMENT_ID,
+    wireIndex: 0
+  });
+  
+  this._bufferManager.addWireToOutBuffer(finalRootPt, PUBLIC_OUT_PLACEMENT_ID);
+}
+```
+
+**Result**: The circuit now contains:
+- `PUBLIC_IN[0]` = Initial Merkle root
+- `PUBLIC_OUT[0]` = Final Merkle root
+- Verifier can confirm the state transition is valid without seeing individual storage operations
+
+---
+
+**Why Event-Driven Architecture?**
+
+1. **Clean separation**: L2 logic doesn't pollute core EVM execution
+2. **Extensibility**: New transaction modes can be added via new event handlers
+3. **Composability**: L1 and L2 modes coexist using the same codebase
+4. **Correctness**: Pre/post hooks ensure signature verification and state finalization happen at the right times
 
 ---
 
