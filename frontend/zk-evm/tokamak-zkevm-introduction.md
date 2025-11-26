@@ -23,7 +23,7 @@ To be more precised about the proof generation,
 ### **Benchmarking Proof Generation Efficiency**
 
 <aside>
-💡
+
 
 To evaluate proof-generation performance, we benchmarked **Tokamak zkEVM** against **SP1**, a reference zkVM framework, on two hardware setups: Apple M4 Pro (48 GB RAM) and RTX 5060 Ti (16 GB VRAM).
 Our test measured proof generation for **16 low-complexity Ethereum transactions**, while SP1’s public benchmark verified **10 random L1 block transactions**.
@@ -69,7 +69,7 @@ Tokamak was designed for the developers building real-world applications and com
 
 This modular approach turns what is traditionally a costly auditing bottleneck into a **scalable, developer-friendly strength**—setting Tokamak apart from other SNARKs that require re-auditing for every new circuit.
 
-In practice ****, each Tokamak subcircuit implements a core function—such as arithmetic, hashing, storage, or EVM opcodes—allowing developers to compose these building blocks into circuits precisely matched to their application logic.
+In practice , each Tokamak subcircuit implements a core function—such as arithmetic, hashing, storage, or EVM opcodes—allowing developers to compose these building blocks into circuits precisely matched to their application logic.
 
 This composable structure enables **tailored efficiency**,**field programmability**, and **easier auditing**, giving developers a “toolbox” of verified modules to assemble complexed dApps quickly and safely.
 
@@ -89,7 +89,7 @@ While many zero-knowledge systems focus on speed alone, the Tokamak zkEVM rethin
 
 **Fixed Universal Circuits (Traditional Approach)**   
 
-Most existing zkEVMs, such as [**RiscZero](https://dev.risczero.com/), [SP1](https://docs.succinct.xyz/docs/sp1/introduction)** rely on a single, fixed circuit modeled as a large Random Access Machine (RAM). The same massive circuit must process everything.
+Most existing zkEVMs, such as [RiscZero](https://dev.risczero.com/), [SP1](https://docs.succinct.xyz/docs/sp1/introduction) rely on a single, fixed circuit modeled as a large Random Access Machine (RAM). The same massive circuit must process everything.
 
 **Trade-offs:** Huge, complex circuits make proof generation slow and inefficient for specific tasks.
 
